@@ -303,16 +303,15 @@ void test_led_waiting_blink() {
   assertRgb({255, 60, 0}, ledColorAt(LedMode::Waiting, 500));
 }
 
-void test_led_done_then_steady() {
+void test_led_done_blinks_slowly_until_acked() {
   Rgb on{0, 255, 0}, off{0, 0, 0};
   assertRgb(on, ledColorAt(LedMode::Done, 0));
+  assertRgb(on, ledColorAt(LedMode::Done, 199));
   assertRgb(off, ledColorAt(LedMode::Done, 200));
-  assertRgb(on, ledColorAt(LedMode::Done, 400));
-  assertRgb(off, ledColorAt(LedMode::Done, 600));
-  assertRgb(on, ledColorAt(LedMode::Done, 800));
-  assertRgb(off, ledColorAt(LedMode::Done, 1000));
-  assertRgb({0, 40, 0}, ledColorAt(LedMode::Done, 1200));
-  assertRgb({0, 40, 0}, ledColorAt(LedMode::Done, 3600000));
+  assertRgb(off, ledColorAt(LedMode::Done, 999));
+  assertRgb(on, ledColorAt(LedMode::Done, 1000));
+  assertRgb(off, ledColorAt(LedMode::Done, 1500));
+  assertRgb(on, ledColorAt(LedMode::Done, 3600000));  // still blinking an hour later
 }
 
 void test_led_off() {
@@ -474,7 +473,7 @@ int main() {
   RUN_TEST(test_clock_format);
   RUN_TEST(test_clock_unsynced);
   RUN_TEST(test_led_waiting_blink);
-  RUN_TEST(test_led_done_then_steady);
+  RUN_TEST(test_led_done_blinks_slowly_until_acked);
   RUN_TEST(test_led_off);
   RUN_TEST(test_wifi_bars);
   RUN_TEST(test_weather_icon_mapping);

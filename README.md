@@ -12,7 +12,7 @@ Claude Code sessions ──hooks──▶ hook/claude-monit-hook.js ──HTTP�
 | State | Slot | Clawd | LED |
 |---|---|---|---|
 | waiting for permission | orange background, `WAITING!` blinks | waves | orange, blinking |
-| done | green `done` | jumps | 3 green blinks, then dim green |
+| done | green `done` | jumps | green flash once a second |
 | working | blue `working...` | bobs | off |
 | idle | dimmed `zzz` | sleeps | off |
 
