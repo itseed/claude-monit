@@ -1,0 +1,6 @@
+{
+  "name": "claude-monit-hook",
+  "private": true,
+  "type": "commonjs",
+  "scripts": { "test": "node --test" }
+}

@@ -25,7 +25,7 @@
 - ชื่อ mDNS `claude-monit.local`, ชื่อ AP ตั้งค่า `claude-monit-setup`
 - hook ต้องจบเร็ว, exit 0 ทุกกรณี, ห้ามพิมพ์ลง stdout/stderr, connect timeout ของการส่งประมาณ 0.5 วินาที (ทำใน process ลูก)
 - **ห้ามแก้หรือลบ hook เดิม** ใน `~/.claude/settings.json` ทำได้แค่เพิ่มหรือลบ entry ของตัวเอง (entry ที่ command มีคำว่า `claude-monit-hook.js`)
-- สี: ตัวละคร `#d97757`, พื้นหลัง `#141413`, waiting พื้นช่อง `#3a2a12` ข้อความ `#e8a33d`, done `#5fb36b`, working `#6a9bd8`, idle `#666666`
+- สี: ตัวละคร `#db4900` (ส้มอิฐ — ผู้ใช้ขอหลังเห็นจอจริง; `#d97757` ออกมาเป็นสีโอรส), พื้นหลัง `#141413`, waiting พื้นช่อง `#3a2a12` ข้อความ `#e8a33d`, done `#5fb36b`, working `#6a9bd8`, idle `#666666`
 - หมดอายุ: working/idle เงียบเกิน 30 นาที, waiting/done เงียบเกิน 8 ชั่วโมง; `SessionEnd` ลบทันที
 - ลำดับความสำคัญ: waiting > done > working > idle; แสดงได้สูงสุด 6 ช่อง
 - ตัวละครขนาด 16×14 พิกเซลต่อเฟรม ท่าละ 2 เฟรม ขยายแบบจำนวนเต็ม หน้าตาตาม mockup `character.html` แบบ A
@@ -331,6 +331,24 @@ class Display {
   - ถ้าต้องแสดงผลให้ผู้ใช้ดู ให้ถ่ายรูปหรือให้ผู้ใช้ยืนยัน
 - [ ] **Step 6: Commit:** `feat(fw): clawd pixel sprites and grid renderer with demo mode`
 
+### Task 6b: วันที่และเวลา (เพิ่มตามคำขอผู้ใช้)
+
+**Files:** Create `lib/monit_core/clock_fmt.h/.cpp`; Modify `lib/monit_core/layout.h/.cpp`, `src/display.h/.cpp`, `src/main.cpp`, `platformio.ini` (`-DLOAD_FONT7`); Test `test/test_core/test_main.cpp`
+
+**Interfaces:**
+- `constexpr int STATUS_BAR_H = 18;` ใน `layout.h` — `computeLayout` วางช่องใน y ∈ [18, 240)
+- `struct ClockText { char date[16]; char time[6]; };` และ `ClockText formatClock(const struct tm* t, bool colonOn);` — `t == nullptr` (ยังไม่ซิงก์) → date `""`, time `"--:--"`; colonOn=false → `"14 32"`
+- `Display::renderSessions(..., const ClockText& clk)` / `renderEmpty(host, ip, clk, nowMs)` รับเวลาที่ฟอร์แมตแล้ว
+- Tests: `test_layout_below_status_bar` (cells[0].y == 18, ช่องล่างสุด y+h == 240, count=6 แถวสอง y == 18+111), `test_clock_format` (2026-10-25 14:05 Sunday → "Sun 25 Oct" / "14:05"; colonOn=false → "14 05"), `test_clock_unsynced`
+
+### Task 6c: สภาพอากาศและสัญญาณ WiFi (เพิ่มตามคำขอผู้ใช้)
+
+**Files:** Create `lib/monit_core/weather.h/.cpp`, `src/weather_task.h/.cpp`, `src/icons.h/.cpp`; Modify `src/display.*`, `src/main.cpp`
+**Interfaces:**
+- `int wifiBars(int rssi)`; `enum class WeatherIcon {Sun, PartlyCloudy, Cloud, Rain, Storm}`; `WeatherIcon weatherIconFor(int wmoCode)`; `struct Weather { bool valid; int tempC; int code; }`; `bool parseWeather(const char* json, size_t len, Weather& out)` (อ่าน `current.temperature_2m` ปัดเป็นจำนวนเต็ม และ `current.weather_code`)
+- `struct StatusInfo { ClockText clk; Weather weather; bool wifiUp; int wifiBars; }` ส่งให้ `renderSessions`/`renderEmpty` แทน `ClockText`
+- Tests: `test_wifi_bars`, `test_weather_icon_mapping`, `test_parse_weather` (31.6 → 32, -0.4 → 0; JSON ไม่มี current → false)
+
 ### Task 7: เฟิร์มแวร์ — WiFi, HTTP, ทัช และ LED
 
 **Files:**
@@ -352,6 +370,7 @@ bool touchRead(int& x, int& y);         // พิกัดจอ (ใช้ min/
 void ledBegin(); void ledSet(Rgb c);    // ใช้ analogWrite แบบ active-low (เขียนค่า 255-v)
 ```
 
+- [ ] **Step 0:** หลังต่อ WiFi ได้ เรียก `configTzTime("ICT-7", "pool.ntp.org", "time.google.com")`; main ใช้ `getLocalTime(&tm, 0)` ถ้าได้ false ส่ง nullptr ให้ `formatClock`
 - [ ] **Step 1: `net.cpp`**
   - ก่อนเรียก `autoConnect` ให้ตั้ง callback `setAPCallback` ที่เรียก `d.renderSetup("claude-monit-setup")`
   - ตั้ง `setConfigPortalTimeout(180)` ถ้าหมดเวลาให้แสดง `renderMessage("WiFi failed","restarting...")` แล้ว `ESP.restart()`
@@ -378,6 +397,14 @@ void ledBegin(); void ledSet(Rgb c);    // ใช้ analogWrite แบบ activ
   - `curl -s -o /dev/null -w '%{http_code}' -X POST http://claude-monit.local/snapshot -d 'garbage'` ต้องได้ `400`
   - แตะช่อง api ช่องต้องเป็น idle และ LED ดับ
 - [ ] **Step 5: Commit:** `feat(fw): wifi setup portal, http snapshot api, touch ack and led`
+
+### Task 7b: กดค้างดูรายละเอียด (เพิ่มตามคำขอผู้ใช้)
+
+**Interfaces:**
+- hook `state.js`: `toolFromEvent(evt) -> string|undefined`, `displayCwd(cwd, home) -> string`; snapshot entry เพิ่ม `cwd`, `tool` (สตริงว่างถ้าไม่มี)
+- core: `SnapshotEntry`/`Session` เพิ่ม `char cwd[44]; char tool[24];` (optional ใน JSON); `void formatAge(uint32_t ms, char* out, size_t n)` → `"just now"` (<60 s), `"5 min"`, `"2 h 10 min"`; `class TouchGesture { TouchEvent update(bool touched, int x, int y, uint32_t nowMs); }` กับ `enum class TouchEvent {None, Tap, LongPress}` และ `LONG_PRESS_MS = 600`
+- fw: `Display::renderDetails(const Session&, const StatusInfo&, uint32_t nowMs)`
+- Tests: `toolFromEvent`, `displayCwd`, `buildSnapshot` มี cwd/tool, hook เก็บ tool/cwd; core `test_parse_optional_details`, `test_format_age`, `test_gesture_tap`, `test_gesture_long_press_once`
 
 ### Task 8: ติดตั้ง hook และทดสอบจริงแบบ end-to-end
 
