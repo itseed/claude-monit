@@ -3,6 +3,8 @@
 #include <string>
 #include "session_store.h"
 #include "snapshot.h"
+#include "layout.h"
+#include "led_pattern.h"
 
 static const uint32_t MIN_MS = 60UL * 1000;
 static const uint32_t HOUR_MS = 60UL * MIN_MS;
@@ -203,6 +205,62 @@ void test_done_generation_increments() {
   TEST_ASSERT_EQUAL_UINT32(g0 + 1, store.doneGeneration());
 }
 
+// ---- layout ----
+
+void test_layout_grid() {
+  struct { int count, cols, rows, scale; } cases[] = {
+      {0, 1, 1, 8}, {1, 1, 1, 8}, {2, 2, 1, 6}, {3, 2, 2, 4}, {4, 2, 2, 4}, {5, 3, 2, 3}, {6, 3, 2, 3},
+  };
+  for (auto& c : cases) {
+    Layout l = computeLayout(c.count);
+    TEST_ASSERT_EQUAL(c.cols, l.cols);
+    TEST_ASSERT_EQUAL(c.rows, l.rows);
+    TEST_ASSERT_EQUAL(c.scale, l.scale);
+    TEST_ASSERT_EQUAL(c.count, l.count);
+  }
+}
+
+void test_layout_cells_cover_screen() {
+  Layout l = computeLayout(6);
+  TEST_ASSERT_EQUAL(0, l.cells[0].x);
+  TEST_ASSERT_EQUAL(0, l.cells[0].y);
+  TEST_ASSERT_EQUAL(106, l.cells[0].w);
+  TEST_ASSERT_EQUAL(120, l.cells[0].h);
+  TEST_ASSERT_EQUAL(320, l.cells[5].x + l.cells[5].w);
+  TEST_ASSERT_EQUAL(120, l.cells[3].y);
+  TEST_ASSERT_EQUAL(240, l.cells[5].y + l.cells[5].h);
+}
+
+// ---- led ----
+
+static void assertRgb(Rgb want, Rgb got) {
+  TEST_ASSERT_EQUAL_UINT8(want.r, got.r);
+  TEST_ASSERT_EQUAL_UINT8(want.g, got.g);
+  TEST_ASSERT_EQUAL_UINT8(want.b, got.b);
+}
+
+void test_led_waiting_blink() {
+  assertRgb({255, 60, 0}, ledColorAt(LedMode::Waiting, 0));
+  assertRgb({0, 0, 0}, ledColorAt(LedMode::Waiting, 250));
+  assertRgb({255, 60, 0}, ledColorAt(LedMode::Waiting, 500));
+}
+
+void test_led_done_then_steady() {
+  Rgb on{0, 255, 0}, off{0, 0, 0};
+  assertRgb(on, ledColorAt(LedMode::Done, 0));
+  assertRgb(off, ledColorAt(LedMode::Done, 200));
+  assertRgb(on, ledColorAt(LedMode::Done, 400));
+  assertRgb(off, ledColorAt(LedMode::Done, 600));
+  assertRgb(on, ledColorAt(LedMode::Done, 800));
+  assertRgb(off, ledColorAt(LedMode::Done, 1000));
+  assertRgb({0, 40, 0}, ledColorAt(LedMode::Done, 1200));
+  assertRgb({0, 40, 0}, ledColorAt(LedMode::Done, 3600000));
+}
+
+void test_led_off() {
+  for (uint32_t t : {0u, 250u, 1200u, 99999u}) assertRgb({0, 0, 0}, ledColorAt(LedMode::Off, t));
+}
+
 int main() {
   UNITY_BEGIN();
   RUN_TEST(test_parse_valid);
@@ -220,5 +278,10 @@ int main() {
   RUN_TEST(test_visible_keeps_order_under_6);
   RUN_TEST(test_led_mode);
   RUN_TEST(test_done_generation_increments);
+  RUN_TEST(test_layout_grid);
+  RUN_TEST(test_layout_cells_cover_screen);
+  RUN_TEST(test_led_waiting_blink);
+  RUN_TEST(test_led_done_then_steady);
+  RUN_TEST(test_led_off);
   return UNITY_END();
 }
