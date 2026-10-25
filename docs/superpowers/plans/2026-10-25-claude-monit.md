@@ -331,6 +331,16 @@ class Display {
   - ถ้าต้องแสดงผลให้ผู้ใช้ดู ให้ถ่ายรูปหรือให้ผู้ใช้ยืนยัน
 - [ ] **Step 6: Commit:** `feat(fw): clawd pixel sprites and grid renderer with demo mode`
 
+### Task 6b: วันที่และเวลา (เพิ่มตามคำขอผู้ใช้)
+
+**Files:** Create `lib/monit_core/clock_fmt.h/.cpp`; Modify `lib/monit_core/layout.h/.cpp`, `src/display.h/.cpp`, `src/main.cpp`, `platformio.ini` (`-DLOAD_FONT7`); Test `test/test_core/test_main.cpp`
+
+**Interfaces:**
+- `constexpr int STATUS_BAR_H = 18;` ใน `layout.h` — `computeLayout` วางช่องใน y ∈ [18, 240)
+- `struct ClockText { char date[16]; char time[6]; };` และ `ClockText formatClock(const struct tm* t, bool colonOn);` — `t == nullptr` (ยังไม่ซิงก์) → date `""`, time `"--:--"`; colonOn=false → `"14 32"`
+- `Display::renderSessions(..., const ClockText& clk)` / `renderEmpty(host, ip, clk, nowMs)` รับเวลาที่ฟอร์แมตแล้ว
+- Tests: `test_layout_below_status_bar` (cells[0].y == 18, ช่องล่างสุด y+h == 240, count=6 แถวสอง y == 18+111), `test_clock_format` (2026-10-25 14:05 Sunday → "Sun 25 Oct" / "14:05"; colonOn=false → "14 05"), `test_clock_unsynced`
+
 ### Task 7: เฟิร์มแวร์ — WiFi, HTTP, ทัช และ LED
 
 **Files:**
@@ -352,6 +362,7 @@ bool touchRead(int& x, int& y);         // พิกัดจอ (ใช้ min/
 void ledBegin(); void ledSet(Rgb c);    // ใช้ analogWrite แบบ active-low (เขียนค่า 255-v)
 ```
 
+- [ ] **Step 0:** หลังต่อ WiFi ได้ เรียก `configTzTime("ICT-7", "pool.ntp.org", "time.google.com")`; main ใช้ `getLocalTime(&tm, 0)` ถ้าได้ false ส่ง nullptr ให้ `formatClock`
 - [ ] **Step 1: `net.cpp`**
   - ก่อนเรียก `autoConnect` ให้ตั้ง callback `setAPCallback` ที่เรียก `d.renderSetup("claude-monit-setup")`
   - ตั้ง `setConfigPortalTimeout(180)` ถ้าหมดเวลาให้แสดง `renderMessage("WiFi failed","restarting...")` แล้ว `ESP.restart()`

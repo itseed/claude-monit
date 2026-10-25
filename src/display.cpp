@@ -92,26 +92,59 @@ void Display::drawCell(const Cell& c, const Session& s, int scale, int font, uin
   if (!blinkOff) drawFitted(stateLabel(s.state), cx, textY + lineH, c.w - 8, font, stateColor(s.state));
 }
 
-void Display::renderSessions(const Session* const* v, int n, uint32_t nowMs) {
+void Display::drawStatusBar(const ClockText& clk) {
+  spr_.drawFastHLine(0, STATUS_BAR_H - 1, SCREEN_W, GRID);
+  spr_.setTextColor(IDLE_FG);
+  spr_.setTextDatum(TL_DATUM);
+  spr_.drawString(clk.date, 4, 1, 2);
+  spr_.setTextColor(TEXT);
+  spr_.setTextDatum(TR_DATUM);
+  spr_.drawString(clk.time, SCREEN_W - 4, 1, 2);
+}
+
+void Display::renderSessions(const Session* const* v, int n, const ClockText& clk, uint32_t nowMs) {
   last_ = computeLayout(n);
   spr_.fillSprite(BG);
+  drawStatusBar(clk);
   const int font = last_.count <= 2 ? 2 : 1;
   for (int i = 0; i < last_.count; i++) drawCell(last_.cells[i], *v[i], last_.scale, font, nowMs);
   spr_.pushSprite(0, 0);
 }
 
-void Display::renderEmpty(const char* host, const char* ip, uint32_t nowMs) {
+void Display::renderEmpty(const char* host, const char* ip, const ClockText& clk, uint32_t nowMs) {
   last_ = computeLayout(0);
   spr_.fillSprite(BG);
-  const int scale = 8;
-  const int sx = (SCREEN_W - CLAWD_W * scale) / 2, sy = 40;
+
+  // Sleeping Clawd above a big desk clock.
+  const int scale = 4;
+  const int sx = (SCREEN_W - CLAWD_W * scale) / 2, sy = 14;
   drawClawd(spr_, sx, sy, scale, State::Idle, 0, false);
   spr_.setTextColor(IDLE_FG);
   spr_.setTextDatum(TL_DATUM);
-  spr_.drawString("z", sx + CLAWD_W * scale, sy - (int)((nowMs / 500) % 4) * 4, 4);
+  spr_.drawString("z", sx + CLAWD_W * scale, sy - (int)((nowMs / 500) % 4) * 3, 2);
+
+  // Font 7 (7-segment): draw HH, colon and MM separately so blinking never shifts digits.
+  const int clockY = 84;
+  spr_.setTextColor(TEXT);
+  if (clk.time[2] == ':' || clk.time[2] == ' ') {
+    char hh[3] = {clk.time[0], clk.time[1], 0}, mm[3] = {clk.time[3], clk.time[4], 0};
+    const int digitsW = spr_.textWidth("00", 7), colonW = spr_.textWidth(":", 7);
+    const int x0 = (SCREEN_W - (2 * digitsW + colonW)) / 2;
+    spr_.setTextDatum(TL_DATUM);
+    spr_.drawString(hh, x0, clockY, 7);
+    if (clk.time[2] == ':') spr_.drawString(":", x0 + digitsW, clockY, 7);
+    spr_.drawString(mm, x0 + digitsW + colonW, clockY, 7);
+  } else {
+    spr_.setTextDatum(TC_DATUM);
+    spr_.drawString(clk.time, SCREEN_W / 2, clockY, 7);
+  }
+
   spr_.setTextDatum(TC_DATUM);
-  spr_.drawString(host, SCREEN_W / 2, 176, 2);
-  spr_.drawString(ip, SCREEN_W / 2, 196, 2);
+  spr_.setTextColor(WAIT_FG);
+  spr_.drawString(clk.date, SCREEN_W / 2, 146, 4);
+  spr_.setTextColor(IDLE_FG);
+  spr_.drawString(host, SCREEN_W / 2, 198, 2);
+  spr_.drawString(ip, SCREEN_W / 2, 216, 2);
   spr_.pushSprite(0, 0);
 }
 

@@ -42,12 +42,20 @@ void loop() {
   }
   if (now - lastFrame >= 66) {  // ~15 fps
     lastFrame = now;
+    struct tm t {};  // fake clock: Sun 25 Oct 2026, 14:00 + uptime
+    t.tm_year = 126;
+    t.tm_mon = 9;
+    t.tm_mday = 25;
+    t.tm_wday = 0;
+    t.tm_hour = 14 + (now / 3600000) % 10;
+    t.tm_min = (now / 60000) % 60;
+    const ClockText clk = formatClock(&t, (now / 500) % 2 == 0);
     if (store.count() == 0) {
-      display.renderEmpty("claude-monit.local", "192.168.1.123", now);
+      display.renderEmpty("claude-monit.local", "192.168.1.123", clk, now);
     } else {
       const Session* v[MAX_VISIBLE];
       int n = store.visible(v);
-      display.renderSessions(v, n, now);
+      display.renderSessions(v, n, clk, now);
     }
   }
 }

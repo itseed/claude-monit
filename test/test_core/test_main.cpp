@@ -5,6 +5,8 @@
 #include "snapshot.h"
 #include "layout.h"
 #include "led_pattern.h"
+#include "clock_fmt.h"
+#include <time.h>
 
 static const uint32_t MIN_MS = 60UL * 1000;
 static const uint32_t HOUR_MS = 60UL * MIN_MS;
@@ -220,15 +222,46 @@ void test_layout_grid() {
   }
 }
 
-void test_layout_cells_cover_screen() {
+void test_layout_below_status_bar() {
   Layout l = computeLayout(6);
   TEST_ASSERT_EQUAL(0, l.cells[0].x);
-  TEST_ASSERT_EQUAL(0, l.cells[0].y);
+  TEST_ASSERT_EQUAL(STATUS_BAR_H, l.cells[0].y);
   TEST_ASSERT_EQUAL(106, l.cells[0].w);
-  TEST_ASSERT_EQUAL(120, l.cells[0].h);
+  TEST_ASSERT_EQUAL(111, l.cells[0].h);
   TEST_ASSERT_EQUAL(320, l.cells[5].x + l.cells[5].w);
-  TEST_ASSERT_EQUAL(120, l.cells[3].y);
+  TEST_ASSERT_EQUAL(STATUS_BAR_H + 111, l.cells[3].y);
   TEST_ASSERT_EQUAL(240, l.cells[5].y + l.cells[5].h);
+  Layout one = computeLayout(1);
+  TEST_ASSERT_EQUAL(STATUS_BAR_H, one.cells[0].y);
+  TEST_ASSERT_EQUAL(240 - STATUS_BAR_H, one.cells[0].h);
+}
+
+// ---- clock ----
+
+void test_clock_format() {
+  struct tm t {};
+  t.tm_year = 2026 - 1900;
+  t.tm_mon = 9;  // October
+  t.tm_mday = 25;
+  t.tm_wday = 0;  // Sunday
+  t.tm_hour = 14;
+  t.tm_min = 5;
+  ClockText c = formatClock(&t, true);
+  TEST_ASSERT_EQUAL_STRING("Sun 25 Oct", c.date);
+  TEST_ASSERT_EQUAL_STRING("14:05", c.time);
+  TEST_ASSERT_EQUAL_STRING("14 05", formatClock(&t, false).time);
+  t.tm_hour = 9;
+  t.tm_mday = 3;
+  t.tm_wday = 2;
+  c = formatClock(&t, true);
+  TEST_ASSERT_EQUAL_STRING("Tue 3 Oct", c.date);
+  TEST_ASSERT_EQUAL_STRING("09:05", c.time);
+}
+
+void test_clock_unsynced() {
+  ClockText c = formatClock(nullptr, true);
+  TEST_ASSERT_EQUAL_STRING("", c.date);
+  TEST_ASSERT_EQUAL_STRING("--:--", c.time);
 }
 
 // ---- led ----
@@ -279,7 +312,9 @@ int main() {
   RUN_TEST(test_led_mode);
   RUN_TEST(test_done_generation_increments);
   RUN_TEST(test_layout_grid);
-  RUN_TEST(test_layout_cells_cover_screen);
+  RUN_TEST(test_layout_below_status_bar);
+  RUN_TEST(test_clock_format);
+  RUN_TEST(test_clock_unsynced);
   RUN_TEST(test_led_waiting_blink);
   RUN_TEST(test_led_done_then_steady);
   RUN_TEST(test_led_off);
