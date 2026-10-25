@@ -17,14 +17,16 @@ Claude Code sessions ──hooks──▶ hook/claude-monit-hook.js ──HTTP�
 | idle | dimmed `zzz` | sleeps | off |
 
 - **Status bar:** date, Bangkok weather (Open-Meteo, every 15 min), WiFi signal and time (NTP, UTC+7).
-- **No sessions:** the board turns into a desk clock.
-- **Up to 6 slots.** With more sessions than that, the most urgent ones are shown.
+- **No sessions:** the board turns into a desk clock, with Clawd strolling across, looking up at the clock and napping.
+- **Up to 6 slots per page.** With more sessions, pages advance every 8 s (15 s on page 1 while something waits), and dots in the status bar show the page. Waiting and done sessions are always on page 1.
+- **Effects:** a `!` bubble pops up when a session starts waiting, and a pixel burst plays when one finishes. After 5 minutes of waiting, Clawd waves faster and the frame blinks; after 15 minutes it starts sweating.
 
 ### Touch
 
 On this board the touch panel only reports *that* it is pressed, not *where*.
 
 - **Tap:** acknowledges every waiting/done session at once (they go idle and the LED turns off). If a details page is open, a tap closes it.
+- **Double tap:** goes to the next page.
 - **Hold (about 0.6 s):** opens the details page for the most urgent session: how long it has been waiting, the tool it wants (e.g. `Bash`) and its folder. Hold again to step to the next session.
 
 ## Setup
