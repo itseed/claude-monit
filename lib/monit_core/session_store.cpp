@@ -10,10 +10,6 @@ static int priority(State s) {
   }
 }
 
-static uint32_t ageMs(const Session& s, uint32_t nowMs) {
-  return s.ageAtReceiptMs + (uint32_t)(nowMs - s.receivedAtMs);
-}
-
 const SessionStore::Ack* SessionStore::findAck(const char* id) const {
   for (int i = 0; i < ackCount_; i++)
     if (!strcmp(acks_[i].id, id)) return &acks_[i];
@@ -88,7 +84,7 @@ void SessionStore::expire(uint32_t nowMs) {
   for (int i = 0; i < count_; i++) {
     const Session& s = sessions_[i];
     bool alert = s.reported == State::Waiting || s.reported == State::Done;
-    if (ageMs(s, nowMs) <= (alert ? ALERT_TTL_MS : ACTIVE_TTL_MS)) sessions_[k++] = s;
+    if (sessionAgeMs(s, nowMs) <= (alert ? ALERT_TTL_MS : ACTIVE_TTL_MS)) sessions_[k++] = s;
   }
   count_ = k;
 }

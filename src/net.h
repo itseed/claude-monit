@@ -11,3 +11,5 @@ void netOnSnapshot(bool (*cb)(const char* body, size_t len));
 // Body for GET /status.
 void netOnStatus(String (*fn)());
 String netLocalIp();
+// Writer for GET /screen.bmp (body of `size` bytes).
+void netOnScreen(void (*fn)(Print& out), uint32_t size);

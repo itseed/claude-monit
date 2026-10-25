@@ -40,6 +40,13 @@ struct Session {
   uint32_t enteredAtMs;  // board time when the shown state last changed (for transition effects)
 };
 
+// Time since the session's last event. `nowMs` may be slightly older than the
+// receipt time (loop() reads millis() before handling HTTP): that counts as 0.
+inline uint32_t sessionAgeMs(const Session& s, uint32_t nowMs) {
+  const uint32_t elapsed = (int32_t)(nowMs - s.receivedAtMs) < 0 ? 0 : nowMs - s.receivedAtMs;
+  return s.ageAtReceiptMs + elapsed;
+}
+
 class SessionStore {
  public:
   // Replaces the whole session set. Returns false if the snapshot is older

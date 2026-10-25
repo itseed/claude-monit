@@ -106,7 +106,7 @@ void Display::drawCell(const Cell& c, const Session& s, int scale, int font, uin
   const int sx = c.x + (c.w - CLAWD_W * scale) / 2;
   const int sy = top + lift;
   const bool idle = s.state == State::Idle;
-  const int urgency = s.state == State::Waiting ? urgencyLevel(s.ageAtReceiptMs + (nowMs - s.receivedAtMs)) : 0;
+  const int urgency = s.state == State::Waiting ? urgencyLevel(sessionAgeMs(s, nowMs)) : 0;
   if (s.state == State::Waiting) {  // every waiting slot gets a full orange frame
     const bool thick = urgency >= 1 && (nowMs / 250) % 2;  // waiting 5+ min: thicker, blinking
     spr_.drawRect(c.x, c.y, c.w, c.h, WAIT_FG);
@@ -244,7 +244,7 @@ void Display::renderDetails(const Session& s, const StatusInfo& st, uint32_t now
   const int tx = sx + CLAWD_W * scale + 14, tw = SCREEN_W - tx - 6;
   const int cx = tx + tw / 2;
   char age[16], line[48];
-  formatAge(s.ageAtReceiptMs + (nowMs - s.receivedAtMs), age, sizeof(age));
+  formatAge(sessionAgeMs(s, nowMs), age, sizeof(age));
   switch (s.state) {
     case State::Waiting: snprintf(line, sizeof(line), "waiting %s", age); break;
     case State::Done: snprintf(line, sizeof(line), "done %s%s", age, strcmp(age, "just now") ? " ago" : ""); break;
@@ -295,4 +295,29 @@ void Display::renderMessage(const char* line1, const char* line2) {
   spr_.setTextColor(IDLE_FG);
   spr_.drawString(line2, SCREEN_W / 2, 130, 2);
   spr_.pushSprite(0, 0);
+}
+
+void Display::writeBmp(Print& out) {
+  auto le = [](uint8_t* p, uint32_t v, int n) {
+    for (int i = 0; i < n; i++) p[i] = (v >> (8 * i)) & 0xff;
+  };
+  uint8_t h[54] = {'B', 'M'};
+  le(h + 2, BMP_SIZE, 4);
+  le(h + 10, 54, 4);   // pixel data offset
+  le(h + 14, 40, 4);   // BITMAPINFOHEADER
+  le(h + 18, SCREEN_W, 4);
+  le(h + 22, SCREEN_H, 4);  // positive height: rows stored bottom-up
+  le(h + 26, 1, 2);
+  le(h + 28, 24, 2);
+  out.write(h, sizeof(h));
+  static uint8_t row[SCREEN_W * 3];
+  for (int y = SCREEN_H - 1; y >= 0; y--) {
+    for (int x = 0; x < SCREEN_W; x++) {
+      const uint16_t c = spr_.readPixel(x, y);
+      row[x * 3 + 0] = (c & 0x1f) << 3;           // B
+      row[x * 3 + 1] = ((c >> 5) & 0x3f) << 2;    // G
+      row[x * 3 + 2] = ((c >> 11) & 0x1f) << 3;   // R
+    }
+    out.write(row, sizeof(row));
+  }
 }

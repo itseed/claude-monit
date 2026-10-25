@@ -1,4 +1,5 @@
 #pragma once
+#include <Print.h>
 #include <TFT_eSPI.h>
 #include "clock_fmt.h"
 #include "layout.h"
@@ -22,6 +23,9 @@ class Display {
   void renderDetails(const Session& s, const StatusInfo& st, uint32_t nowMs);
   void renderSetup(const char* apName);
   void renderMessage(const char* line1, const char* line2);
+  // Last rendered frame as a 24-bit BMP (for README screenshots via GET /screen.bmp).
+  static constexpr uint32_t BMP_SIZE = 54 + SCREEN_W * SCREEN_H * 3;
+  void writeBmp(Print& out);
 
  private:
   TFT_eSPI tft_;
