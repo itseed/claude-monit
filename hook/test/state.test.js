@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const {
-  eventToState, sanitizeName, assignName, prune, buildSnapshot, resolveHostConfig,
+  eventToState, sanitizeName, deriveNames, prune, buildSnapshot, resolveHostConfig,
   toolFromEvent, displayCwd,
 } = require('../lib/state');
 
@@ -37,17 +37,28 @@ test('sanitizeName keeps ASCII, collapses non-ASCII, truncates', () => {
   assert.equal(sanitizeName('claude-monit'), 'claude-monit');
   assert.equal(sanitizeName('โปรเจกต์ใหม่'), '?');
   assert.equal(sanitizeName('app-ทดสอบ-v2'), 'app-?-v2');
-  assert.equal(sanitizeName('x'.repeat(30)), 'x'.repeat(20));
+  assert.equal(sanitizeName('x'.repeat(30)), 'x'.repeat(16));
   assert.equal(sanitizeName(''), 'session');
   assert.equal(sanitizeName(undefined), 'session');
 });
 
-test('assignName picks the lowest free suffix', () => {
-  assert.equal(assignName('api', []), 'api');
-  assert.equal(assignName('api', [{ name: 'web' }]), 'api');
-  assert.equal(assignName('api', [{ name: 'api' }]), 'api#2');
-  assert.equal(assignName('api', [{ name: 'api' }, { name: 'api#3' }]), 'api#2');
-  assert.equal(assignName('api', [{ name: 'api#2' }]), 'api');
+test('deriveNames numbers same-base sessions by creation order', () => {
+  const names = deriveNames([
+    { session_id: 'c', base: 'api', created_at: 30 },
+    { session_id: 'w', base: 'web', created_at: 5 },
+    { session_id: 'a', base: 'api', created_at: 10 },
+    { session_id: 'b', base: 'api', created_at: 10 },
+  ]);
+  assert.deepEqual(names, { a: 'api', b: 'api#2', c: 'api#3', w: 'web' });
+});
+
+test('deriveNames keeps the suffix within 16 chars', () => {
+  const names = deriveNames([
+    { session_id: 'a', base: 'abcdefghijklmnop', created_at: 1 },
+    { session_id: 'b', base: 'abcdefghijklmnop', created_at: 2 },
+  ]);
+  assert.equal(names.a, 'abcdefghijklmnop');
+  assert.equal(names.b, 'abcdefghijklmn#2');
 });
 
 test('prune applies per-state TTLs', () => {
@@ -65,8 +76,8 @@ test('prune applies per-state TTLs', () => {
 
 test('buildSnapshot orders by created_at and strips internals', () => {
   const snap = buildSnapshot([
-    { session_id: 'b', name: 'web', base: 'web', state: 'done', created_at: 20, updated_at: 30 },
-    { session_id: 'a', name: 'api', base: 'api', state: 'waiting', created_at: 10, updated_at: 40 },
+    { session_id: 'b', base: 'web', state: 'done', created_at: 20, updated_at: 30 },
+    { session_id: 'a', base: 'api', state: 'waiting', created_at: 10, updated_at: 40 },
   ], 99);
   assert.deepEqual(snap, {
     now: 99,
@@ -94,7 +105,7 @@ test('resolveHostConfig precedence and cache', () => {
 
 test('buildSnapshot carries cwd and tool', () => {
   const snap = buildSnapshot([
-    { session_id: 'a', name: 'api', state: 'waiting', created_at: 1, updated_at: 2, cwd: '~/x/api', tool: 'Bash' },
+    { session_id: 'a', base: 'api', state: 'waiting', created_at: 1, updated_at: 2, cwd: '~/x/api', tool: 'Bash' },
   ], 3);
   assert.equal(snap.sessions[0].cwd, '~/x/api');
   assert.equal(snap.sessions[0].tool, 'Bash');

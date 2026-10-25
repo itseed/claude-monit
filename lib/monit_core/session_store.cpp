@@ -21,7 +21,7 @@ const SessionStore::Ack* SessionStore::findAck(const char* id) const {
 }
 
 bool SessionStore::applySnapshot(const Snapshot& s, uint32_t nowMs) {
-  if (hasSnapshot_ && s.now < lastNow_) return false;
+  if (hasSnapshot_ && s.now < lastNow_ && lastNow_ - s.now < STALE_WINDOW_MS) return false;
   hasSnapshot_ = true;
   lastNow_ = s.now;
 

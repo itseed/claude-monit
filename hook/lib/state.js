@@ -6,7 +6,7 @@ const MIN = 60 * 1000;
 const ACTIVE_TTL_MS = 30 * MIN; // working / idle
 const ALERT_TTL_MS = 8 * 60 * MIN; // waiting / done
 const DEFAULT_HOST = 'claude-monit.local';
-const MAX_NAME = 20;
+const MAX_NAME = 16; // fits a 3x2 slot in the board's small font
 
 const EVENT_STATES = {
   SessionStart: 'idle',
@@ -29,19 +29,28 @@ function eventToState(evt) {
   return EVENT_STATES[name] || null;
 }
 
-/** Printable ASCII only (runs of anything else become one '?'), max 20 chars. */
+/** Printable ASCII only (runs of anything else become one '?'), max 16 chars. */
 function sanitizeName(str) {
   const clean = String(str || '').replace(/[^\x20-\x7e]+/g, '?').trim().slice(0, MAX_NAME);
   return clean || 'session';
 }
 
-/** `base`, or `base#N` with the lowest N not already used by a live session. */
-function assignName(base, liveSessions) {
-  const taken = new Set(liveSessions.map((s) => s.name));
-  if (!taken.has(base)) return base;
-  for (let n = 2; ; n++) {
-    if (!taken.has(`${base}#${n}`)) return `${base}#${n}`;
+/**
+ * Display names by session_id: `base` for the oldest session of each base, then
+ * `base#2`, `base#3`… by creation order. Derived on every snapshot instead of
+ * stored, so sessions that start at the same moment never share a name.
+ */
+function deriveNames(sessions) {
+  const ordered = [...sessions].sort((a, b) => a.created_at - b.created_at
+    || String(a.session_id).localeCompare(String(b.session_id)));
+  const seen = {};
+  const names = {};
+  for (const s of ordered) {
+    const n = (seen[s.base] = (seen[s.base] || 0) + 1);
+    const suffix = n === 1 ? '' : `#${n}`;
+    names[s.session_id] = `${String(s.base).slice(0, MAX_NAME - suffix.length)}${suffix}`;
   }
+  return names;
 }
 
 function ttlFor(state) {
@@ -59,13 +68,14 @@ function prune(sessions, nowMs) {
 }
 
 function buildSnapshot(sessions, nowMs) {
+  const names = deriveNames(sessions);
   return {
     now: nowMs,
     sessions: [...sessions]
       .sort((a, b) => a.created_at - b.created_at)
       .map((s) => ({
         id: s.session_id,
-        name: s.name,
+        name: names[s.session_id],
         state: s.state,
         updated_at: s.updated_at,
         cwd: s.cwd || '',
@@ -112,7 +122,7 @@ module.exports = {
   DEFAULT_HOST,
   eventToState,
   sanitizeName,
-  assignName,
+  deriveNames,
   prune,
   buildSnapshot,
   resolveHostConfig,

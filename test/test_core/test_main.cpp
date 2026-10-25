@@ -101,6 +101,16 @@ void test_older_snapshot_ignored() {
   TEST_ASSERT_TRUE(find(store, "A")->state == State::Waiting);
 }
 
+void test_large_clock_jump_back_resets() {
+  SessionStore store;
+  TEST_ASSERT_TRUE(store.applySnapshot(snap(9999999999999ull, {entry("X", State::Waiting, 1)}), 0));
+  // a real Mac clock far behind the bogus one: treated as a reset, not as stale
+  TEST_ASSERT_TRUE(store.applySnapshot(snap(1000000, {entry("A", State::Working, 999000)}), 10));
+  TEST_ASSERT_EQUAL(1, store.count());
+  TEST_ASSERT_NOT_NULL(find(store, "A"));
+  TEST_ASSERT_FALSE(store.applySnapshot(snap(1000000 - STALE_WINDOW_MS + 1, {entry("A", State::Idle, 1)}), 20));
+}
+
 void test_ack_sticks_until_newer_event() {
   SessionStore store;
   store.applySnapshot(snap(1000, {entry("A", State::Done, 100)}), 0);
@@ -447,6 +457,7 @@ int main() {
   RUN_TEST(test_parse_truncates);
   RUN_TEST(test_apply_replaces_set);
   RUN_TEST(test_older_snapshot_ignored);
+  RUN_TEST(test_large_clock_jump_back_resets);
   RUN_TEST(test_ack_sticks_until_newer_event);
   RUN_TEST(test_ack_only_done_or_waiting);
   RUN_TEST(test_expire_active_30min);

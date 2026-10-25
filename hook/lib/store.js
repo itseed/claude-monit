@@ -56,6 +56,30 @@ function remove(dir, id) {
   }
 }
 
+function readOne(dir, id) {
+  return readJson(fileFor(dir, id));
+}
+
+// Board-offline backoff shared by the hook and the sender.
+const OFFLINE_FILE = 'offline.json';
+
+function offlineUntil(home = homeDir()) {
+  const mark = readJson(path.join(home, OFFLINE_FILE));
+  return (mark && mark.until) || 0;
+}
+
+function markOffline(home, until) {
+  writeJsonAtomic(path.join(home, OFFLINE_FILE), { until });
+}
+
+function clearOffline(home) {
+  try {
+    fs.unlinkSync(path.join(home, OFFLINE_FILE));
+  } catch {
+    // not marked
+  }
+}
+
 function readJson(file) {
   try {
     return JSON.parse(fs.readFileSync(file, 'utf8'));
@@ -64,4 +88,7 @@ function readJson(file) {
   }
 }
 
-module.exports = { homeDir, sessionsDir, readAll, write, remove, readJson, writeJsonAtomic };
+module.exports = {
+  homeDir, sessionsDir, readAll, readOne, write, remove, readJson, writeJsonAtomic,
+  offlineUntil, markOffline, clearOffline,
+};

@@ -8,6 +8,9 @@ constexpr int MAX_SESSIONS = 16;
 constexpr int MAX_VISIBLE = 6;
 constexpr uint32_t ACTIVE_TTL_MS = 30UL * 60 * 1000;  // working/idle
 constexpr uint32_t ALERT_TTL_MS = 8UL * 3600 * 1000;  // waiting/done
+// Snapshots older than the newest by less than this are out-of-order and dropped;
+// a bigger jump back means the sender's clock changed, so start over.
+constexpr uint32_t STALE_WINDOW_MS = 60UL * 1000;
 
 struct SnapshotEntry {
   char id[40];
