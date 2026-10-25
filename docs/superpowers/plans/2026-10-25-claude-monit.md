@@ -341,6 +341,14 @@ class Display {
 - `Display::renderSessions(..., const ClockText& clk)` / `renderEmpty(host, ip, clk, nowMs)` รับเวลาที่ฟอร์แมตแล้ว
 - Tests: `test_layout_below_status_bar` (cells[0].y == 18, ช่องล่างสุด y+h == 240, count=6 แถวสอง y == 18+111), `test_clock_format` (2026-10-25 14:05 Sunday → "Sun 25 Oct" / "14:05"; colonOn=false → "14 05"), `test_clock_unsynced`
 
+### Task 6c: สภาพอากาศและสัญญาณ WiFi (เพิ่มตามคำขอผู้ใช้)
+
+**Files:** Create `lib/monit_core/weather.h/.cpp`, `src/weather_task.h/.cpp`, `src/icons.h/.cpp`; Modify `src/display.*`, `src/main.cpp`
+**Interfaces:**
+- `int wifiBars(int rssi)`; `enum class WeatherIcon {Sun, PartlyCloudy, Cloud, Rain, Storm}`; `WeatherIcon weatherIconFor(int wmoCode)`; `struct Weather { bool valid; int tempC; int code; }`; `bool parseWeather(const char* json, size_t len, Weather& out)` (อ่าน `current.temperature_2m` ปัดเป็นจำนวนเต็ม และ `current.weather_code`)
+- `struct StatusInfo { ClockText clk; Weather weather; bool wifiUp; int wifiBars; }` ส่งให้ `renderSessions`/`renderEmpty` แทน `ClockText`
+- Tests: `test_wifi_bars`, `test_weather_icon_mapping`, `test_parse_weather` (31.6 → 32, -0.4 → 0; JSON ไม่มี current → false)
+
 ### Task 7: เฟิร์มแวร์ — WiFi, HTTP, ทัช และ LED
 
 **Files:**

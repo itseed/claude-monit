@@ -1,6 +1,7 @@
 #include "display.h"
 #include <string.h>
 #include "clawd.h"
+#include "icons.h"
 
 namespace {
 constexpr uint16_t rgb(uint32_t hex) {
@@ -92,28 +93,52 @@ void Display::drawCell(const Cell& c, const Session& s, int scale, int font, uin
   if (!blinkOff) drawFitted(stateLabel(s.state), cx, textY + lineH, c.w - 8, font, stateColor(s.state));
 }
 
-void Display::drawStatusBar(const ClockText& clk) {
+void Display::drawTemp(const Weather& w, int x, int y, int font, uint8_t datum) {
+  // Fonts are ASCII-only, so the degree sign is drawn as a small ring.
+  char t[8];
+  snprintf(t, sizeof(t), "%d", w.tempC);
+  const int tw = spr_.textWidth(t, font), h = spr_.fontHeight(font);
+  const int ring = font >= 4 ? 3 : 2;
+  const int cw = spr_.textWidth("C", font);
+  const int total = tw + 2 * ring + 3 + cw;
+  const int left = datum == TC_DATUM ? x - total / 2 : x;
+  spr_.setTextColor(TEXT);
+  spr_.setTextDatum(TL_DATUM);
+  spr_.drawString(t, left, y, font);
+  spr_.drawCircle(left + tw + ring + 1, y + ring + 1, ring, TEXT);
+  spr_.drawString("C", left + tw + 2 * ring + 3, y, font);
+  (void)h;
+}
+
+void Display::drawStatusBar(const StatusInfo& st) {
   spr_.drawFastHLine(0, STATUS_BAR_H - 1, SCREEN_W, GRID);
   spr_.setTextColor(IDLE_FG);
   spr_.setTextDatum(TL_DATUM);
-  spr_.drawString(clk.date, 4, 1, 2);
+  spr_.drawString(st.clk.date, 4, 1, 2);
+  if (st.weather.valid) {
+    drawWeatherIcon(spr_, 130, 1, 2, weatherIconFor(st.weather.code));
+    drawTemp(st.weather, 150, 1, 2, TL_DATUM);
+  }
+  drawWifiBars(spr_, 238, 2, st.wifiUp, st.wifiBars);
   spr_.setTextColor(TEXT);
   spr_.setTextDatum(TR_DATUM);
-  spr_.drawString(clk.time, SCREEN_W - 4, 1, 2);
+  spr_.drawString(st.clk.time, SCREEN_W - 4, 1, 2);
 }
 
-void Display::renderSessions(const Session* const* v, int n, const ClockText& clk, uint32_t nowMs) {
+void Display::renderSessions(const Session* const* v, int n, const StatusInfo& st, uint32_t nowMs) {
   last_ = computeLayout(n);
   spr_.fillSprite(BG);
-  drawStatusBar(clk);
+  drawStatusBar(st);
   const int font = last_.count <= 2 ? 2 : 1;
   for (int i = 0; i < last_.count; i++) drawCell(last_.cells[i], *v[i], last_.scale, font, nowMs);
   spr_.pushSprite(0, 0);
 }
 
-void Display::renderEmpty(const char* host, const char* ip, const ClockText& clk, uint32_t nowMs) {
+void Display::renderEmpty(const char* host, const char* ip, const StatusInfo& st, uint32_t nowMs) {
   last_ = computeLayout(0);
   spr_.fillSprite(BG);
+  const ClockText& clk = st.clk;
+  drawWifiBars(spr_, SCREEN_W - 20, 4, st.wifiUp, st.wifiBars);
 
   // Sleeping Clawd above a big desk clock.
   const int scale = 4;
@@ -141,10 +166,21 @@ void Display::renderEmpty(const char* host, const char* ip, const ClockText& clk
 
   spr_.setTextDatum(TC_DATUM);
   spr_.setTextColor(WAIT_FG);
-  spr_.drawString(clk.date, SCREEN_W / 2, 146, 4);
+  spr_.drawString(clk.date, SCREEN_W / 2, 140, 4);
+  if (st.weather.valid) {
+    char t[8];
+    snprintf(t, sizeof(t), "%d", st.weather.tempC);
+    const int iconW = 8 * 3, gap = 8;
+    const int tempW = spr_.textWidth(t, 4) + 9 + spr_.textWidth("C", 4);
+    const int x0 = (SCREEN_W - (iconW + gap + tempW)) / 2;
+    drawWeatherIcon(spr_, x0, 172, 3, weatherIconFor(st.weather.code));
+    drawTemp(st.weather, x0 + iconW + gap, 172, 4, TL_DATUM);
+  }
+  char where[64];
+  snprintf(where, sizeof(where), "%s  %s", host, ip);
+  spr_.setTextDatum(TC_DATUM);
   spr_.setTextColor(IDLE_FG);
-  spr_.drawString(host, SCREEN_W / 2, 198, 2);
-  spr_.drawString(ip, SCREEN_W / 2, 216, 2);
+  spr_.drawString(where, SCREEN_W / 2, 222, 2);
   spr_.pushSprite(0, 0);
 }
 

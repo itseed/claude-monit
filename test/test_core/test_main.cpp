@@ -6,6 +6,7 @@
 #include "layout.h"
 #include "led_pattern.h"
 #include "clock_fmt.h"
+#include "weather.h"
 #include <time.h>
 
 static const uint32_t MIN_MS = 60UL * 1000;
@@ -294,6 +295,47 @@ void test_led_off() {
   for (uint32_t t : {0u, 250u, 1200u, 99999u}) assertRgb({0, 0, 0}, ledColorAt(LedMode::Off, t));
 }
 
+// ---- weather / wifi ----
+
+void test_wifi_bars() {
+  TEST_ASSERT_EQUAL(4, wifiBars(-40));
+  TEST_ASSERT_EQUAL(4, wifiBars(-55));
+  TEST_ASSERT_EQUAL(3, wifiBars(-56));
+  TEST_ASSERT_EQUAL(3, wifiBars(-65));
+  TEST_ASSERT_EQUAL(2, wifiBars(-75));
+  TEST_ASSERT_EQUAL(1, wifiBars(-85));
+  TEST_ASSERT_EQUAL(0, wifiBars(-86));
+}
+
+void test_weather_icon_mapping() {
+  TEST_ASSERT_TRUE(weatherIconFor(0) == WeatherIcon::Sun);
+  TEST_ASSERT_TRUE(weatherIconFor(1) == WeatherIcon::PartlyCloudy);
+  TEST_ASSERT_TRUE(weatherIconFor(2) == WeatherIcon::PartlyCloudy);
+  TEST_ASSERT_TRUE(weatherIconFor(3) == WeatherIcon::Cloud);
+  TEST_ASSERT_TRUE(weatherIconFor(45) == WeatherIcon::Cloud);
+  TEST_ASSERT_TRUE(weatherIconFor(61) == WeatherIcon::Rain);
+  TEST_ASSERT_TRUE(weatherIconFor(81) == WeatherIcon::Rain);
+  TEST_ASSERT_TRUE(weatherIconFor(95) == WeatherIcon::Storm);
+  TEST_ASSERT_TRUE(weatherIconFor(99) == WeatherIcon::Storm);
+  TEST_ASSERT_TRUE(weatherIconFor(1234) == WeatherIcon::Cloud);
+}
+
+void test_parse_weather() {
+  const char* ok = "{\"latitude\":13.75,\"current\":{\"time\":\"2026-10-25T14:00\",\"temperature_2m\":31.6,\"weather_code\":61}}";
+  Weather w{};
+  TEST_ASSERT_TRUE(parseWeather(ok, strlen(ok), w));
+  TEST_ASSERT_TRUE(w.valid);
+  TEST_ASSERT_EQUAL(32, w.tempC);
+  TEST_ASSERT_EQUAL(61, w.code);
+  const char* cold = "{\"current\":{\"temperature_2m\":-0.4,\"weather_code\":0}}";
+  TEST_ASSERT_TRUE(parseWeather(cold, strlen(cold), w));
+  TEST_ASSERT_EQUAL(0, w.tempC);
+  const char* bad = "{\"error\":true}";
+  Weather b{};
+  TEST_ASSERT_FALSE(parseWeather(bad, strlen(bad), b));
+  TEST_ASSERT_FALSE(b.valid);
+}
+
 int main() {
   UNITY_BEGIN();
   RUN_TEST(test_parse_valid);
@@ -318,5 +360,8 @@ int main() {
   RUN_TEST(test_led_waiting_blink);
   RUN_TEST(test_led_done_then_steady);
   RUN_TEST(test_led_off);
+  RUN_TEST(test_wifi_bars);
+  RUN_TEST(test_weather_icon_mapping);
+  RUN_TEST(test_parse_weather);
   return UNITY_END();
 }
