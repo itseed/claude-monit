@@ -129,6 +129,19 @@ void test_expire_active_30min() {
   TEST_ASSERT_EQUAL(0, store.count());
 }
 
+void test_acked_alert_keeps_alert_ttl() {
+  SessionStore store;
+  store.applySnapshot(snap(1000, {entry("A", State::Waiting, 1000)}), 0);
+  store.acknowledge("A");
+  store.expire(33 * MIN_MS);  // older than the idle TTL, but it was reported as waiting
+  TEST_ASSERT_EQUAL(1, store.count());
+  TEST_ASSERT_TRUE(find(store, "A")->state == State::Idle);
+  store.applySnapshot(snap(1000 + 34 * MIN_MS, {entry("A", State::Waiting, 1000)}), 34 * MIN_MS);
+  store.expire(35 * MIN_MS);
+  TEST_ASSERT_EQUAL(1, store.count());
+  TEST_ASSERT_TRUE(find(store, "A")->state == State::Idle);
+}
+
 void test_expire_alert_8h() {
   SessionStore store;
   store.applySnapshot(snap(1000, {entry("A", State::Waiting, 1000)}), 0);
@@ -438,6 +451,7 @@ int main() {
   RUN_TEST(test_ack_only_done_or_waiting);
   RUN_TEST(test_expire_active_30min);
   RUN_TEST(test_expire_alert_8h);
+  RUN_TEST(test_acked_alert_keeps_alert_ttl);
   RUN_TEST(test_age_uses_snapshot_clock);
   RUN_TEST(test_expire_handles_millis_wrap);
   RUN_TEST(test_visible_priority_over_6);

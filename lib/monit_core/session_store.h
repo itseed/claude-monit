@@ -29,7 +29,8 @@ struct Session {
   char name[24];
   char cwd[44];
   char tool[24];
-  State state;
+  State state;     // what is shown (Idle after a touch acknowledge)
+  State reported;  // what the Mac last reported; decides the expiry TTL
   uint64_t updatedAt;
   uint32_t ageAtReceiptMs;
   uint32_t receivedAtMs;
