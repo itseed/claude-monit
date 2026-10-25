@@ -25,7 +25,7 @@
 - ชื่อ mDNS `claude-monit.local`, ชื่อ AP ตั้งค่า `claude-monit-setup`
 - hook ต้องจบเร็ว, exit 0 ทุกกรณี, ห้ามพิมพ์ลง stdout/stderr, connect timeout ของการส่งประมาณ 0.5 วินาที (ทำใน process ลูก)
 - **ห้ามแก้หรือลบ hook เดิม** ใน `~/.claude/settings.json` ทำได้แค่เพิ่มหรือลบ entry ของตัวเอง (entry ที่ command มีคำว่า `claude-monit-hook.js`)
-- สี: ตัวละคร `#d97757`, พื้นหลัง `#141413`, waiting พื้นช่อง `#3a2a12` ข้อความ `#e8a33d`, done `#5fb36b`, working `#6a9bd8`, idle `#666666`
+- สี: ตัวละคร `#db4900` (ส้มอิฐ — ผู้ใช้ขอหลังเห็นจอจริง; `#d97757` ออกมาเป็นสีโอรส), พื้นหลัง `#141413`, waiting พื้นช่อง `#3a2a12` ข้อความ `#e8a33d`, done `#5fb36b`, working `#6a9bd8`, idle `#666666`
 - หมดอายุ: working/idle เงียบเกิน 30 นาที, waiting/done เงียบเกิน 8 ชั่วโมง; `SessionEnd` ลบทันที
 - ลำดับความสำคัญ: waiting > done > working > idle; แสดงได้สูงสุด 6 ช่อง
 - ตัวละครขนาด 16×14 พิกเซลต่อเฟรม ท่าละ 2 เฟรม ขยายแบบจำนวนเต็ม หน้าตาตาม mockup `character.html` แบบ A

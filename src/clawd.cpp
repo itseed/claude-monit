@@ -54,7 +54,7 @@ uint32_t framePeriodMs(State st) {
 uint8_t clawdFrame(State st, uint32_t nowMs) { return (nowMs / framePeriodMs(st)) % 2; }
 
 void drawClawd(TFT_eSprite& spr, int x, int y, int scale, State st, uint8_t frame, bool dim) {
-  const uint16_t body = dim ? spr.color565(0x6b, 0x3b, 0x2b) : spr.color565(0xd9, 0x77, 0x57);
+  const uint16_t body = dim ? spr.color565(0x6b, 0x3b, 0x2b) : spr.color565(0xdb, 0x49, 0x00);
   const uint16_t eye = spr.color565(0x14, 0x14, 0x13);
   const Frame fr = frameFor(st, frame);
   const int top = y - fr.lift * scale;
