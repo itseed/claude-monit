@@ -44,12 +44,11 @@ bool SessionStore::applySnapshot(const Snapshot& s, uint32_t nowMs) {
     if (ack && d.updatedAt <= ack->updatedAt && (d.state == State::Waiting || d.state == State::Done))
       d.state = State::Idle;
 
-    if (d.state == State::Done) {
-      bool wasDone = false;
-      for (int j = 0; j < count_; j++)
-        if (!strcmp(sessions_[j].id, d.id)) wasDone = sessions_[j].state == State::Done;
-      if (!wasDone) doneGen_++;
-    }
+    const Session* prev = nullptr;
+    for (int j = 0; j < count_; j++)
+      if (!strcmp(sessions_[j].id, d.id)) prev = &sessions_[j];
+    d.enteredAtMs = (prev && prev->state == d.state) ? prev->enteredAtMs : nowMs;
+    if (d.state == State::Done && !(prev && prev->state == State::Done)) doneGen_++;
   }
 
   // Drop acks of sessions that left the snapshot.

@@ -28,6 +28,7 @@ class Display {
   Layout last_{};
   void drawCell(const Cell& c, const Session& s, int scale, int font, uint32_t nowMs);
   void drawStatusBar(const StatusInfo& st);
+  void drawEffects(const Cell& c, const Session& s, int sx, int sy, int scale, uint32_t nowMs);
   void drawTemp(const Weather& w, int x, int y, int font, uint8_t datum);
   void drawFitted(const char* text, int cx, int y, int maxW, int font, uint16_t color);
 };

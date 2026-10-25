@@ -8,6 +8,7 @@
 #include "clock_fmt.h"
 #include "weather.h"
 #include "details.h"
+#include "anim.h"
 #include <time.h>
 
 static const uint32_t MIN_MS = 60UL * 1000;
@@ -449,6 +450,57 @@ void test_gesture_long_press_once() {
   TEST_ASSERT_TRUE(g.update(false, 0, 0, 2100) == TouchEvent::None);  // no tap after long press
 }
 
+// ---- animations ----
+
+void test_entered_at_tracks_state_changes() {
+  SessionStore store;
+  store.applySnapshot(snap(1000, {entry("A", State::Working, 900)}), 100);
+  TEST_ASSERT_EQUAL_UINT32(100, find(store, "A")->enteredAtMs);
+  store.applySnapshot(snap(1100, {entry("A", State::Working, 1000)}), 200);
+  TEST_ASSERT_EQUAL_UINT32(100, find(store, "A")->enteredAtMs);  // same state: unchanged
+  store.applySnapshot(snap(1200, {entry("A", State::Waiting, 1100)}), 300);
+  TEST_ASSERT_EQUAL_UINT32(300, find(store, "A")->enteredAtMs);
+  store.acknowledge("A");
+  store.applySnapshot(snap(1300, {entry("A", State::Waiting, 1100)}), 400);  // still acked
+  TEST_ASSERT_TRUE(find(store, "A")->state == State::Idle);
+  store.applySnapshot(snap(1400, {entry("A", State::Done, 1350)}), 500);
+  TEST_ASSERT_EQUAL_UINT32(500, find(store, "A")->enteredAtMs);
+}
+
+void test_urgency_levels() {
+  TEST_ASSERT_EQUAL(0, urgencyLevel(5 * MIN_MS - 1));
+  TEST_ASSERT_EQUAL(1, urgencyLevel(5 * MIN_MS));
+  TEST_ASSERT_EQUAL(1, urgencyLevel(15 * MIN_MS - 1));
+  TEST_ASSERT_EQUAL(2, urgencyLevel(15 * MIN_MS));
+}
+
+void test_walk_cycle() {
+  const int lo = 10, hi = 250;
+  WalkPose p = walkPose(0, lo, hi);
+  TEST_ASSERT_TRUE(p.pose == ClawdPose::Walk);
+  TEST_ASSERT_TRUE(p.facingRight);
+  TEST_ASSERT_EQUAL(lo, p.x);
+  TEST_ASSERT_EQUAL((lo + hi) / 2, walkPose(WALK_MS / 2, lo, hi).x);
+  TEST_ASSERT_NOT_EQUAL(walkPose(0, lo, hi).frame, walkPose(250, lo, hi).frame);  // legs alternate
+
+  p = walkPose(WALK_MS + 1000, lo, hi);
+  TEST_ASSERT_TRUE(p.pose == ClawdPose::LookUp);
+  TEST_ASSERT_EQUAL(hi, p.x);
+
+  p = walkPose(WALK_MS + LOOK_MS, lo, hi);
+  TEST_ASSERT_TRUE(p.pose == ClawdPose::Walk);
+  TEST_ASSERT_FALSE(p.facingRight);
+  TEST_ASSERT_EQUAL(hi, p.x);
+
+  p = walkPose(2 * WALK_MS + LOOK_MS + 1000, lo, hi);
+  TEST_ASSERT_TRUE(p.pose == ClawdPose::Sleep);
+  TEST_ASSERT_EQUAL(lo, p.x);
+
+  p = walkPose(WALK_CYCLE_MS, lo, hi);  // wraps
+  TEST_ASSERT_TRUE(p.pose == ClawdPose::Walk);
+  TEST_ASSERT_EQUAL(lo, p.x);
+}
+
 int main() {
   UNITY_BEGIN();
   RUN_TEST(test_parse_valid);
@@ -485,5 +537,8 @@ int main() {
   RUN_TEST(test_gesture_ignores_glitch);
   RUN_TEST(test_acknowledge_all);
   RUN_TEST(test_next_for_details_by_urgency);
+  RUN_TEST(test_entered_at_tracks_state_changes);
+  RUN_TEST(test_urgency_levels);
+  RUN_TEST(test_walk_cycle);
   return UNITY_END();
 }

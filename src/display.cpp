@@ -1,5 +1,6 @@
 #include "display.h"
 #include <string.h>
+#include "anim.h"
 #include "clawd.h"
 #include "details.h"
 #include "icons.h"
@@ -66,6 +67,33 @@ void Display::drawFitted(const char* text, int cx, int y, int maxW, int font, ui
   spr_.drawString(buf, cx, y, font);
 }
 
+// One-off effects right after a state change: a "!" bubble for a new
+// permission request, a pixel burst for a finished session.
+void Display::drawEffects(const Cell& c, const Session& s, int sx, int sy, int scale, uint32_t nowMs) {
+  const uint32_t since = nowMs - s.enteredAtMs;
+  if (s.state == State::Waiting && since < 3000) {
+    const int font = scale >= 4 ? 4 : 2;
+    const int bw = spr_.textWidth("!", font) + 4 * scale, bh = spr_.fontHeight(font) + scale;
+    int bx = sx + 12 * scale, by = sy - CLAWD_MAX_LIFT * scale - bh + ((nowMs / 150) % 2) * scale;
+    if (bx + bw > c.x + c.w - 2) bx = c.x + c.w - 2 - bw;
+    if (by < c.y + 2) by = c.y + 2;
+    spr_.fillRoundRect(bx, by, bw, bh, scale, TEXT);
+    spr_.setTextColor(WAIT_FG);
+    spr_.setTextDatum(MC_DATUM);
+    spr_.drawString("!", bx + bw / 2, by + bh / 2, font);
+  } else if (s.state == State::Done && since < 1500) {
+    static const int8_t DIRS[8][2] = {{10, 0}, {7, -7}, {0, -10}, {-7, -7}, {-10, 0}, {-7, 7}, {0, 10}, {7, 7}};
+    static const uint16_t COLORS[3] = {rgb(0xf2c12e), DONE_FG, rgb(0xdb4900)};
+    const int cx = sx + 8 * scale, cy = sy + 5 * scale;
+    const int r = scale * (5 + (int)(since * 9 / 1500));  // radius grows outward
+    for (int i = 0; i < 8; i++) {
+      const int px = cx + DIRS[i][0] * r / 10, py = cy + DIRS[i][1] * r / 10;
+      if (px < c.x || px + scale > c.x + c.w || py < c.y || py + scale > c.y + c.h) continue;
+      spr_.fillRect(px, py, scale, scale, COLORS[(i + since / 150) % 3]);
+    }
+  }
+}
+
 void Display::drawCell(const Cell& c, const Session& s, int scale, int font, uint32_t nowMs) {
   if (s.state == State::Waiting) spr_.fillRect(c.x, c.y, c.w, c.h, WAIT_BG);
   spr_.drawRect(c.x, c.y, c.w, c.h, GRID);
@@ -78,7 +106,17 @@ void Display::drawCell(const Cell& c, const Session& s, int scale, int font, uin
   const int sx = c.x + (c.w - CLAWD_W * scale) / 2;
   const int sy = top + lift;
   const bool idle = s.state == State::Idle;
-  drawClawd(spr_, sx, sy, scale, s.state, clawdFrame(s.state, nowMs), idle);
+  const int urgency = s.state == State::Waiting ? urgencyLevel(s.ageAtReceiptMs + (nowMs - s.receivedAtMs)) : 0;
+  if (urgency >= 1 && (nowMs / 250) % 2) {  // been waiting a while: blinking frame
+    spr_.drawRect(c.x, c.y, c.w, c.h, WAIT_FG);
+    spr_.drawRect(c.x + 1, c.y + 1, c.w - 2, c.h - 2, WAIT_FG);
+  }
+  drawClawd(spr_, sx, sy, scale, s.state, clawdFrame(s.state, nowMs, urgency >= 1), idle);
+  if (urgency >= 2) {  // sweat drop sliding down the left side of the head
+    const int dy = (nowMs / 150) % 5;
+    spr_.fillRect(sx + 1 * scale, sy + (2 + dy) * scale, scale, 2 * scale, WORK_FG);
+  }
+  drawEffects(c, s, sx, sy, scale, nowMs);
 
   if (idle) {  // floating z
     const int dz = (nowMs / 500) % 4;
@@ -141,13 +179,15 @@ void Display::renderEmpty(const char* host, const char* ip, const StatusInfo& st
   const ClockText& clk = st.clk;
   drawWifiBars(spr_, SCREEN_W - 20, 4, st.wifiUp, st.wifiBars);
 
-  // Sleeping Clawd above a big desk clock.
-  const int scale = 4;
-  const int sx = (SCREEN_W - CLAWD_W * scale) / 2, sy = 14;
-  drawClawd(spr_, sx, sy, scale, State::Idle, 0, false);
-  spr_.setTextColor(IDLE_FG);
-  spr_.setTextDatum(TL_DATUM);
-  spr_.drawString("z", sx + CLAWD_W * scale, sy - (int)((nowMs / 500) % 4) * 3, 2);
+  // Clawd strolls above a big desk clock, looks up at it, then naps.
+  const int scale = 4, sy = 14 + scale;
+  const WalkPose w = walkPose(nowMs, 8, SCREEN_W - 28 - CLAWD_W * scale);
+  drawClawdPose(spr_, w.x, sy, scale, w.pose, w.facingRight, w.frame);
+  if (w.pose == ClawdPose::Sleep) {
+    spr_.setTextColor(IDLE_FG);
+    spr_.setTextDatum(TL_DATUM);
+    spr_.drawString("z", w.x + CLAWD_W * scale, sy - (int)((nowMs / 500) % 4) * 3, 2);
+  }
 
   // Font 7 (7-segment): draw HH, colon and MM separately so blinking never shifts digits.
   const int clockY = 84;

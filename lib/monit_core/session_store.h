@@ -37,6 +37,7 @@ struct Session {
   uint64_t updatedAt;
   uint32_t ageAtReceiptMs;
   uint32_t receivedAtMs;
+  uint32_t enteredAtMs;  // board time when the shown state last changed (for transition effects)
 };
 
 class SessionStore {

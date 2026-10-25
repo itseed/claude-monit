@@ -11,6 +11,7 @@ SessionStore store;
 static const char* DEMO_NAMES[] = {"api", "web", "mobile", "docs", "claude-monit", "agent-teams#2",
                                    "pms-extension", "fuse"};
 static const int DEMO_COUNTS[] = {0, 1, 2, 4, 6, 8};
+static const uint32_t DEMO_STEP_MS[] = {40000, 5000, 5000, 5000, 5000, 5000};  // full walk cycle on the clock
 
 static void loadDemo(int count, uint32_t nowMs) {
   Snapshot s{};
@@ -21,7 +22,8 @@ static void loadDemo(int count, uint32_t nowMs) {
     snprintf(e.id, sizeof(e.id), "demo-%d", i);
     strncpy(e.name, DEMO_NAMES[i], sizeof(e.name) - 1);
     e.state = states[i % 4];
-    e.updatedAt = s.now;
+    // demo-0 has waited 20 min (sweat), demo-4 6 min (blinking frame)
+    e.updatedAt = s.now - (i == 0 ? 20UL * 60000 : i == 4 ? 6UL * 60000 : 0);
   }
   store.applySnapshot(s, nowMs);
 }
@@ -35,7 +37,7 @@ void loop() {
   static int step = -1;
   static uint32_t lastStep = 0, lastFrame = 0;
   const uint32_t now = millis();
-  if (step < 0 || now - lastStep > 5000) {
+  if (step < 0 || now - lastStep > DEMO_STEP_MS[step]) {
     step = (step + 1) % (int)(sizeof(DEMO_COUNTS) / sizeof(DEMO_COUNTS[0]));
     lastStep = now;
     loadDemo(DEMO_COUNTS[step], now);
