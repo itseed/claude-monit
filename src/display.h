@@ -21,8 +21,6 @@ class Display {
   void renderDetails(const Session& s, const StatusInfo& st, uint32_t nowMs);
   void renderSetup(const char* apName);
   void renderMessage(const char* line1, const char* line2);
-  // Index of the slot at screen point (x,y) in the last renderSessions(), or -1.
-  int hitTest(int x, int y) const;
 
  private:
   TFT_eSPI tft_;

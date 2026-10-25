@@ -69,9 +69,8 @@ void loop() {
 #include "weather_task.h"
 #include <WiFi.h>
 
-static char shownIds[MAX_VISIBLE][40];  // ids in the slots last drawn, for touch
-static int shownCount = 0;
 static TouchGesture gesture;
+static unsigned presses = 0;
 static char detailsId[40] = "";  // session shown full-screen after a long press
 static uint32_t detailsSince = 0;
 constexpr uint32_t DETAILS_TIMEOUT_MS = 15000;
@@ -84,23 +83,21 @@ static const Session* findSession(const char* id) {
   return nullptr;
 }
 
+// Without touch positions: tap = acknowledge everything (or close details),
+// long press = show details of the most urgent session, then the next one.
 static void handleTouch(uint32_t now) {
-  int x = 0, y = 0;
-  const bool touched = touchSample(x, y);
-  const TouchEvent ev = gesture.update(touched, x, y, now);
+  const TouchEvent ev = gesture.update(touchPressed(), 0, 0, now);
   if (ev == TouchEvent::None) return;
-  if (detailsId[0]) {  // any touch closes the details view
-    if (ev == TouchEvent::Tap) detailsId[0] = '\0';
+  presses++;
+  if (ev == TouchEvent::Tap) {
+    if (detailsId[0]) detailsId[0] = '\0';
+    else store.acknowledgeAll();
     return;
   }
-  const int i = display.hitTest(gesture.x(), gesture.y());
-  if (i < 0 || i >= shownCount) return;
-  if (ev == TouchEvent::Tap) {
-    store.acknowledge(shownIds[i]);
-  } else {
-    memcpy(detailsId, shownIds[i], sizeof(detailsId));
-    detailsSince = now;
-  }
+  const Session* next = store.nextForDetails(detailsId);
+  if (!next) return;
+  memcpy(detailsId, next->id, sizeof(detailsId));
+  detailsSince = now;
 }
 
 static bool onSnapshot(const char* body, size_t len) {
@@ -123,6 +120,7 @@ static String statusJson() {
   JsonDocument doc;
   doc["uptime_ms"] = millis();
   doc["led"] = (int)store.ledMode();
+  doc["presses"] = presses;
   JsonArray arr = doc["sessions"].to<JsonArray>();
   const Session* v[MAX_SESSIONS];
   const int n = store.visible(v, MAX_SESSIONS);
@@ -196,13 +194,10 @@ void loop() {
     if (detail) {
       display.renderDetails(*detail, st, now);
     } else if (store.count() == 0) {
-      shownCount = 0;
       display.renderEmpty("claude-monit.local", netLocalIp().c_str(), st, now);
     } else {
       const Session* v[MAX_VISIBLE];
-      shownCount = store.visible(v);
-      for (int i = 0; i < shownCount; i++) memcpy(shownIds[i], v[i]->id, sizeof(shownIds[i]));
-      display.renderSessions(v, shownCount, st, now);
+      display.renderSessions(v, store.visible(v), st, now);
     }
   }
 }

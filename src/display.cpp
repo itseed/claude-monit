@@ -220,7 +220,7 @@ void Display::renderDetails(const Session& s, const StatusInfo& st, uint32_t now
 
   spr_.setTextDatum(BC_DATUM);
   spr_.setTextColor(IDLE_FG);
-  spr_.drawString("tap anywhere to close", SCREEN_W / 2, SCREEN_H - 4, 1);
+  spr_.drawString("tap: close    hold: next session", SCREEN_W / 2, SCREEN_H - 4, 1);
   spr_.pushSprite(0, 0);
 }
 
@@ -249,12 +249,4 @@ void Display::renderMessage(const char* line1, const char* line2) {
   spr_.setTextColor(IDLE_FG);
   spr_.drawString(line2, SCREEN_W / 2, 130, 2);
   spr_.pushSprite(0, 0);
-}
-
-int Display::hitTest(int x, int y) const {
-  for (int i = 0; i < last_.count; i++) {
-    const Cell& c = last_.cells[i];
-    if (x >= c.x && x < c.x + c.w && y >= c.y && y < c.y + c.h) return i;
-  }
-  return -1;
 }

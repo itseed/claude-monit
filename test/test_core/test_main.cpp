@@ -380,6 +380,43 @@ void test_gesture_tap() {
   TEST_ASSERT_TRUE(g.update(false, 0, 0, 1400) == TouchEvent::None);
 }
 
+void test_gesture_ignores_glitch() {
+  TouchGesture g;
+  g.update(true, 0, 0, 1000);
+  TEST_ASSERT_TRUE(g.update(false, 0, 0, 1000 + MIN_PRESS_MS - 1) == TouchEvent::None);
+  g.update(true, 0, 0, 2000);
+  TEST_ASSERT_TRUE(g.update(false, 0, 0, 2000 + MIN_PRESS_MS) == TouchEvent::Tap);
+}
+
+void test_acknowledge_all() {
+  SessionStore store;
+  store.applySnapshot(snap(1000, {entry("w", State::Waiting, 900), entry("d", State::Done, 900),
+                                  entry("k", State::Working, 900)}),
+                      0);
+  TEST_ASSERT_EQUAL(2, store.acknowledgeAll());
+  TEST_ASSERT_TRUE(find(store, "w")->state == State::Idle);
+  TEST_ASSERT_TRUE(find(store, "d")->state == State::Idle);
+  TEST_ASSERT_TRUE(find(store, "k")->state == State::Working);
+  TEST_ASSERT_TRUE(store.ledMode() == LedMode::Off);
+  TEST_ASSERT_EQUAL(0, store.acknowledgeAll());
+}
+
+void test_next_for_details_by_urgency() {
+  SessionStore store;
+  TEST_ASSERT_NULL(store.nextForDetails(""));
+  store.applySnapshot(snap(1000, {entry("i", State::Idle, 990), entry("k", State::Working, 950),
+                                  entry("d", State::Done, 900), entry("w", State::Waiting, 800)}),
+                      0);
+  const char* order[] = {"w", "d", "k", "i", "w"};  // wraps around
+  const Session* s = store.nextForDetails("");
+  for (const char* id : order) {
+    TEST_ASSERT_NOT_NULL(s);
+    TEST_ASSERT_EQUAL_STRING(id, s->id);
+    s = store.nextForDetails(s->id);
+  }
+  TEST_ASSERT_EQUAL_STRING("w", store.nextForDetails("gone")->id);
+}
+
 void test_gesture_long_press_once() {
   TouchGesture g;
   g.update(true, 50, 60, 1000);
@@ -421,5 +458,8 @@ int main() {
   RUN_TEST(test_format_age);
   RUN_TEST(test_gesture_tap);
   RUN_TEST(test_gesture_long_press_once);
+  RUN_TEST(test_gesture_ignores_glitch);
+  RUN_TEST(test_acknowledge_all);
+  RUN_TEST(test_next_for_details_by_urgency);
   return UNITY_END();
 }

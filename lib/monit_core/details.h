@@ -3,11 +3,12 @@
 #include <stdint.h>
 
 constexpr uint32_t LONG_PRESS_MS = 600;
+constexpr uint32_t MIN_PRESS_MS = 40;  // shorter presses are PENIRQ glitches (GPIO36 + WiFi)
 
 enum class TouchEvent { None, Tap, LongPress };
 
-// Turns raw touched/not-touched samples into taps (released before
-// LONG_PRESS_MS) and long presses (fired once while still held).
+// Turns raw touched/not-touched samples into taps (held MIN_PRESS_MS..LONG_PRESS_MS)
+// and long presses (fired once while still held).
 class TouchGesture {
  public:
   TouchEvent update(bool touched, int x, int y, uint32_t nowMs);

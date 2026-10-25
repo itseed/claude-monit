@@ -42,6 +42,11 @@ class SessionStore {
   bool applySnapshot(const Snapshot& s, uint32_t nowMs);
   // Touch acknowledge: Waiting/Done -> Idle until a newer event arrives.
   bool acknowledge(const char* id);
+  // Acknowledges every Waiting/Done session; returns how many changed.
+  int acknowledgeAll();
+  // Session after `currentId` in urgency order (waiting > done > working > idle,
+  // newest first), wrapping; the most urgent one if `currentId` is empty or gone.
+  const Session* nextForDetails(const char* currentId) const;
   void expire(uint32_t nowMs);
   // Up to `max` sessions in snapshot order; when there are more than `max`,
   // keeps the most important ones (waiting > done > working > idle, newest first).
@@ -64,4 +69,5 @@ class SessionStore {
   uint32_t doneGen_ = 0;
 
   const Ack* findAck(const char* id) const;
+  int rankByUrgency(int* idx) const;
 };

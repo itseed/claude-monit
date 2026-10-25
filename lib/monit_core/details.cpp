@@ -19,7 +19,8 @@ TouchEvent TouchGesture::update(bool touched, int x, int y, uint32_t nowMs) {
   }
   if (down_) {
     down_ = false;
-    return longFired_ ? TouchEvent::None : TouchEvent::Tap;
+    if (longFired_ || nowMs - downAt_ < MIN_PRESS_MS) return TouchEvent::None;
+    return TouchEvent::Tap;
   }
   return TouchEvent::None;
 }

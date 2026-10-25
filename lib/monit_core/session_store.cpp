@@ -94,35 +94,55 @@ void SessionStore::expire(uint32_t nowMs) {
   count_ = k;
 }
 
-int SessionStore::visible(const Session** out, int max) const {
-  if (count_ <= max) {
-    for (int i = 0; i < count_; i++) out[i] = &sessions_[i];
-    return count_;
-  }
-  // Rank by importance, then keep the chosen ones in snapshot order.
-  int idx[MAX_SESSIONS];
+int SessionStore::rankByUrgency(int* idx) const {
+  auto better = [&](int a, int b) {
+    int pa = priority(sessions_[a].state), pb = priority(sessions_[b].state);
+    if (pa != pb) return pa > pb;
+    if (sessions_[a].updatedAt != sessions_[b].updatedAt) return sessions_[a].updatedAt > sessions_[b].updatedAt;
+    return a < b;
+  };
   for (int i = 0; i < count_; i++) idx[i] = i;
   for (int i = 1; i < count_; i++) {
     int v = idx[i], j = i - 1;
-    auto better = [&](int a, int b) {
-      int pa = priority(sessions_[a].state), pb = priority(sessions_[b].state);
-      if (pa != pb) return pa > pb;
-      if (sessions_[a].updatedAt != sessions_[b].updatedAt)
-        return sessions_[a].updatedAt > sessions_[b].updatedAt;
-      return a < b;
-    };
     while (j >= 0 && better(v, idx[j])) {
       idx[j + 1] = idx[j];
       j--;
     }
     idx[j + 1] = v;
   }
+  return count_;
+}
+
+int SessionStore::visible(const Session** out, int max) const {
+  if (count_ <= max) {
+    for (int i = 0; i < count_; i++) out[i] = &sessions_[i];
+    return count_;
+  }
+  // Keep the most urgent ones, shown in snapshot order.
+  int idx[MAX_SESSIONS];
+  rankByUrgency(idx);
   bool chosen[MAX_SESSIONS] = {};
   for (int i = 0; i < max; i++) chosen[idx[i]] = true;
   int n = 0;
   for (int i = 0; i < count_; i++)
     if (chosen[i]) out[n++] = &sessions_[i];
   return n;
+}
+
+int SessionStore::acknowledgeAll() {
+  int changed = 0;
+  for (int i = 0; i < count_; i++)
+    if (acknowledge(sessions_[i].id)) changed++;
+  return changed;
+}
+
+const Session* SessionStore::nextForDetails(const char* currentId) const {
+  if (count_ == 0) return nullptr;
+  int idx[MAX_SESSIONS];
+  rankByUrgency(idx);
+  for (int i = 0; i < count_; i++)
+    if (currentId && !strcmp(sessions_[idx[i]].id, currentId)) return &sessions_[idx[(i + 1) % count_]];
+  return &sessions_[idx[0]];
 }
 
 LedMode SessionStore::ledMode() const {
