@@ -154,7 +154,7 @@ static String statusJson() {
     o["id"] = v[i]->id;
     o["name"] = v[i]->name;
     o["state"] = stateName(v[i]->state);
-    o["age_ms"] = v[i]->ageAtReceiptMs + (millis() - v[i]->receivedAtMs);
+    o["age_ms"] = sessionAgeMs(*v[i], millis());
   }
   String out;
   serializeJson(doc, out);
@@ -179,6 +179,7 @@ void setup() {
   touchBegin();
   netOnSnapshot(onSnapshot);
   netOnStatus(statusJson);
+  netOnScreen([](Print& out) { display.writeBmp(out); }, Display::BMP_SIZE);
   netBegin(display);
   weatherBegin();
 }

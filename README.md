@@ -1,5 +1,7 @@
 # claude-monit
 
+<p align="center"><img src="docs/images/sessions-6.gif" width="480" alt="Six Claude Code sessions on the board: two waiting for permission with orange frames, one done, two working and one idle"></p>
+
 A desk display for Claude Code on an ESP32-2432S028 ("Cheap Yellow Display"). Each Claude Code session gets its own animated pixel-art Clawd. The board shows which session is **waiting for permission** and which is **done**, and the RGB LED blinks to get your attention.
 
 ```
@@ -20,6 +22,12 @@ Claude Code sessions ──hooks──▶ hook/claude-monit-hook.js ──HTTP�
 - **No sessions:** the board turns into a desk clock, with Clawd strolling across, looking up at the clock and napping.
 - **Up to 6 slots per page.** With more sessions, pages advance every 8 s (15 s on page 1 while something waits), and dots in the status bar show the page. Waiting and done sessions are always on page 1.
 - **Effects:** a `!` bubble pops up when a session starts waiting, and a pixel burst plays when one finishes. After 5 minutes of waiting, Clawd waves faster and the frame blinks; after 15 minutes it starts sweating.
+
+| A new permission request and a finished session | More than six sessions: page dots | Nothing open: desk clock |
+|---|---|---|
+| <img src="docs/images/sessions-3.png" width="260" alt="'!' bubble over a waiting Clawd and a pixel burst around a finished one"> | <img src="docs/images/sessions-8-pages.png" width="260" alt="Page 1 of 2 with the most urgent sessions"> | <img src="docs/images/clock.gif" width="260" alt="Clawd strolling above a big desk clock with date and weather"> |
+
+Every image is a real frame read from the board's frame buffer. To refresh them, run `python3 tools/screenshots.py [board-ip]`. It shows staged sessions on the board for about a minute; the live sessions come back on the next hook event.
 
 ### Touch
 
@@ -75,6 +83,7 @@ echo '{"host":"192.168.1.50"}' > ~/.claude-monit/config.json
 
 ```bash
 curl http://claude-monit.local/status     # sessions, LED mode, press count
+curl -o screen.bmp http://claude-monit.local/screen.bmp   # what the screen shows right now
 ls ~/.claude-monit/sessions/              # what the hook thinks each session is doing
 ```
 

@@ -31,6 +31,7 @@ class Pager {
 
  private:
   int page_ = 0;
+  int pages_ = 1;
   uint32_t since_ = 0;
   bool started_ = false;
 };

@@ -24,11 +24,12 @@ int Pager::update(uint32_t nowMs, int pages, bool urgent) {
     started_ = true;
     since_ = nowMs;
   }
-  if (pages <= 1 || page_ >= pages) {
-    if (page_ != 0) since_ = nowMs;
+  if (pages != pages_ || page_ >= pages) {  // page set changed: back to page 1, fresh dwell
+    pages_ = pages;
     page_ = 0;
-    if (pages <= 1) return 0;
+    since_ = nowMs;
   }
+  if (pages <= 1) return 0;
   const uint32_t dwell = (page_ == 0 && urgent) ? URGENT_PAGE_MS : PAGE_MS;
   if (nowMs - since_ >= dwell) {
     page_ = (page_ + 1) % pages;
@@ -39,6 +40,7 @@ int Pager::update(uint32_t nowMs, int pages, bool urgent) {
 
 void Pager::next(uint32_t nowMs, int pages) {
   started_ = true;
+  pages_ = pages;
   page_ = pages > 1 ? (page_ + 1) % pages : 0;
   since_ = nowMs;
 }

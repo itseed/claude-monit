@@ -153,6 +153,15 @@ void test_acked_alert_keeps_alert_ttl() {
   TEST_ASSERT_TRUE(find(store, "A")->state == State::Idle);
 }
 
+void test_expire_with_clock_read_before_receipt() {
+  // loop() reads millis() before handling HTTP, so expire() can get a time a
+  // few ms older than the snapshot's receipt time
+  SessionStore store;
+  store.applySnapshot(snap(1000, {entry("A", State::Working, 1000), entry("B", State::Waiting, 1000)}), 5000);
+  store.expire(4990);
+  TEST_ASSERT_EQUAL(2, store.count());
+}
+
 void test_expire_alert_8h() {
   SessionStore store;
   store.applySnapshot(snap(1000, {entry("A", State::Waiting, 1000)}), 0);
@@ -556,6 +565,15 @@ void test_single_page() {
   TEST_ASSERT_EQUAL_STRING("x", v[0]->id);
 }
 
+void test_pager_starts_on_first_page_when_pages_appear() {
+  Pager p;
+  TEST_ASSERT_EQUAL(0, p.update(0, 1, false));
+  TEST_ASSERT_EQUAL(0, p.update(60000, 1, false));       // a long time on a single page
+  TEST_ASSERT_EQUAL(0, p.update(60001, 2, true));        // a 2nd page appears: stay on page 1
+  TEST_ASSERT_EQUAL(0, p.update(60001 + URGENT_PAGE_MS - 1, 2, true));
+  TEST_ASSERT_EQUAL(1, p.update(60001 + URGENT_PAGE_MS, 2, true));
+}
+
 void test_pager_dwell_and_manual_next() {
   Pager p;
   TEST_ASSERT_EQUAL(0, p.update(0, 2, false));
@@ -587,6 +605,7 @@ int main() {
   RUN_TEST(test_ack_only_done_or_waiting);
   RUN_TEST(test_expire_active_30min);
   RUN_TEST(test_expire_alert_8h);
+  RUN_TEST(test_expire_with_clock_read_before_receipt);
   RUN_TEST(test_acked_alert_keeps_alert_ttl);
   RUN_TEST(test_age_uses_snapshot_clock);
   RUN_TEST(test_expire_handles_millis_wrap);
@@ -619,5 +638,6 @@ int main() {
   RUN_TEST(test_pages_put_urgent_first);
   RUN_TEST(test_single_page);
   RUN_TEST(test_pager_dwell_and_manual_next);
+  RUN_TEST(test_pager_starts_on_first_page_when_pages_appear);
   return UNITY_END();
 }
