@@ -44,12 +44,11 @@ bool SessionStore::applySnapshot(const Snapshot& s, uint32_t nowMs) {
     if (ack && d.updatedAt <= ack->updatedAt && (d.state == State::Waiting || d.state == State::Done))
       d.state = State::Idle;
 
-    if (d.state == State::Done) {
-      bool wasDone = false;
-      for (int j = 0; j < count_; j++)
-        if (!strcmp(sessions_[j].id, d.id)) wasDone = sessions_[j].state == State::Done;
-      if (!wasDone) doneGen_++;
-    }
+    const Session* prev = nullptr;
+    for (int j = 0; j < count_; j++)
+      if (!strcmp(sessions_[j].id, d.id)) prev = &sessions_[j];
+    d.enteredAtMs = (prev && prev->state == d.state) ? prev->enteredAtMs : nowMs;
+    if (d.state == State::Done && !(prev && prev->state == State::Done)) doneGen_++;
   }
 
   // Drop acks of sessions that left the snapshot.
@@ -113,16 +112,16 @@ int SessionStore::rankByUrgency(int* idx) const {
   return count_;
 }
 
-int SessionStore::visible(const Session** out, int max) const {
-  if (count_ <= max) {
+int SessionStore::page(int index, const Session** out, int per) const {
+  if (count_ <= per) {
+    if (index != 0) return 0;
     for (int i = 0; i < count_; i++) out[i] = &sessions_[i];
     return count_;
   }
-  // Keep the most urgent ones, shown in snapshot order.
   int idx[MAX_SESSIONS];
   rankByUrgency(idx);
   bool chosen[MAX_SESSIONS] = {};
-  for (int i = 0; i < max; i++) chosen[idx[i]] = true;
+  for (int r = index * per; r < count_ && r < (index + 1) * per; r++) chosen[idx[r]] = true;
   int n = 0;
   for (int i = 0; i < count_; i++)
     if (chosen[i]) out[n++] = &sessions_[i];
