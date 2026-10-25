@@ -18,6 +18,7 @@ class Display {
   void begin();
   void renderSessions(const Session* const* v, int n, const StatusInfo& st, uint32_t nowMs);
   void renderEmpty(const char* host, const char* ip, const StatusInfo& st, uint32_t nowMs);
+  void renderDetails(const Session& s, const StatusInfo& st, uint32_t nowMs);
   void renderSetup(const char* apName);
   void renderMessage(const char* line1, const char* line2);
   // Index of the slot at screen point (x,y) in the last renderSessions(), or -1.

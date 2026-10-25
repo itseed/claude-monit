@@ -12,6 +12,8 @@ constexpr uint32_t ALERT_TTL_MS = 8UL * 3600 * 1000;  // waiting/done
 struct SnapshotEntry {
   char id[40];
   char name[24];
+  char cwd[44];
+  char tool[24];
   State state;
   uint64_t updatedAt;
 };
@@ -25,6 +27,8 @@ struct Snapshot {
 struct Session {
   char id[40];
   char name[24];
+  char cwd[44];
+  char tool[24];
   State state;
   uint64_t updatedAt;
   uint32_t ageAtReceiptMs;

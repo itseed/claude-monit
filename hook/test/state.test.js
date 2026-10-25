@@ -2,6 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const {
   eventToState, sanitizeName, assignName, prune, buildSnapshot, resolveHostConfig,
+  toolFromEvent, displayCwd,
 } = require('../lib/state');
 
 const MIN = 60 * 1000;
@@ -70,8 +71,8 @@ test('buildSnapshot orders by created_at and strips internals', () => {
   assert.deepEqual(snap, {
     now: 99,
     sessions: [
-      { id: 'a', name: 'api', state: 'waiting', updated_at: 40 },
-      { id: 'b', name: 'web', state: 'done', updated_at: 30 },
+      { id: 'a', name: 'api', state: 'waiting', updated_at: 40, cwd: '', tool: '' },
+      { id: 'b', name: 'web', state: 'done', updated_at: 30, cwd: '', tool: '' },
     ],
   });
 });
@@ -89,4 +90,32 @@ test('resolveHostConfig precedence and cache', () => {
     { host: 'claude-monit.local', cachedIp: null });
   assert.deepEqual(resolveHostConfig({ env: {}, configJson: { host: '192.168.1.50' }, cacheJson: { host: '192.168.1.50', ip: '1.1.1.1' } }),
     { host: '192.168.1.50', cachedIp: null });
+});
+
+test('buildSnapshot carries cwd and tool', () => {
+  const snap = buildSnapshot([
+    { session_id: 'a', name: 'api', state: 'waiting', created_at: 1, updated_at: 2, cwd: '~/x/api', tool: 'Bash' },
+  ], 3);
+  assert.equal(snap.sessions[0].cwd, '~/x/api');
+  assert.equal(snap.sessions[0].tool, 'Bash');
+});
+
+test('toolFromEvent', () => {
+  assert.equal(toolFromEvent({ hook_event_name: 'PermissionRequest', tool_name: 'Bash' }), 'Bash');
+  assert.equal(toolFromEvent({ hook_event_name: 'PreToolUse', tool_name: 'Edit' }), 'Edit');
+  assert.equal(toolFromEvent({ hook_event_name: 'Notification', message: 'Claude needs your permission to use WebFetch' }), 'WebFetch');
+  assert.equal(toolFromEvent({ hook_event_name: 'Notification', message: 'Claude is waiting for your input' }), undefined);
+  assert.equal(toolFromEvent({ hook_event_name: 'Stop' }), undefined);
+  assert.equal(toolFromEvent({ hook_event_name: 'PermissionRequest', tool_name: 'mcp__very_long_server_name__tool' }).length <= 20, true);
+});
+
+test('displayCwd shortens home, strips non-ASCII, keeps the tail', () => {
+  assert.equal(displayCwd('/Users/k/project/claude-monit', '/Users/k'), '~/project/claude-monit');
+  assert.equal(displayCwd('/opt/app', '/Users/k'), '/opt/app');
+  assert.equal(displayCwd('/Users/k/งาน/app', '/Users/k'), '~/?/app');
+  const long = displayCwd(`/Users/k/${'a'.repeat(30)}/${'b'.repeat(20)}`, '/Users/k');
+  assert.equal(long.length, 40);
+  assert.ok(long.startsWith('...'));
+  assert.ok(long.endsWith('b'.repeat(20)));
+  assert.equal(displayCwd(undefined, '/Users/k'), '');
 });

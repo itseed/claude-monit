@@ -7,7 +7,10 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { spawn } = require('node:child_process');
-const { eventToState, sanitizeName, assignName, prune, buildSnapshot } = require('./lib/state');
+const os = require('node:os');
+const {
+  eventToState, sanitizeName, assignName, prune, buildSnapshot, toolFromEvent, displayCwd,
+} = require('./lib/state');
 const store = require('./lib/store');
 
 function main() {
@@ -31,6 +34,9 @@ function main() {
     }
     s.state = state;
     s.updated_at = now;
+    s.cwd = displayCwd(evt.cwd, os.homedir());
+    const tool = toolFromEvent(evt);
+    if (tool) s.tool = tool;
     store.write(dir, s);
   }
 

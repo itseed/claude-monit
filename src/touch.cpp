@@ -8,8 +8,6 @@
 namespace {
 SPIClass touchSpi(VSPI);
 XPT2046_Touchscreen ts(TOUCH_CS, TOUCH_IRQ);
-bool wasTouched = false;
-uint32_t lastPress = 0;
 }  // namespace
 
 void touchBegin() {
@@ -18,14 +16,9 @@ void touchBegin() {
   ts.setRotation(1);
 }
 
-bool touchRead(int& x, int& y) {
-  const bool touched = ts.tirqTouched() && ts.touched();
-  const bool press = touched && !wasTouched && millis() - lastPress > 300;
-  wasTouched = touched;
-  if (!press) return false;
-  lastPress = millis();
+bool touchSample(int& x, int& y) {
+  if (!ts.tirqTouched() || !ts.touched()) return false;
   TS_Point p = ts.getPoint();
-  Serial.printf("touch raw x=%d y=%d\n", p.x, p.y);
   x = constrain(map(p.x, TOUCH_X_MIN, TOUCH_X_MAX, 0, SCREEN_W), 0, SCREEN_W - 1);
   y = constrain(map(p.y, TOUCH_Y_MIN, TOUCH_Y_MAX, 0, SCREEN_H), 0, SCREEN_H - 1);
   return true;

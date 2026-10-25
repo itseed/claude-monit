@@ -398,6 +398,14 @@ void ledBegin(); void ledSet(Rgb c);    // ใช้ analogWrite แบบ activ
   - แตะช่อง api ช่องต้องเป็น idle และ LED ดับ
 - [ ] **Step 5: Commit:** `feat(fw): wifi setup portal, http snapshot api, touch ack and led`
 
+### Task 7b: กดค้างดูรายละเอียด (เพิ่มตามคำขอผู้ใช้)
+
+**Interfaces:**
+- hook `state.js`: `toolFromEvent(evt) -> string|undefined`, `displayCwd(cwd, home) -> string`; snapshot entry เพิ่ม `cwd`, `tool` (สตริงว่างถ้าไม่มี)
+- core: `SnapshotEntry`/`Session` เพิ่ม `char cwd[44]; char tool[24];` (optional ใน JSON); `void formatAge(uint32_t ms, char* out, size_t n)` → `"just now"` (<60 s), `"5 min"`, `"2 h 10 min"`; `class TouchGesture { TouchEvent update(bool touched, int x, int y, uint32_t nowMs); }` กับ `enum class TouchEvent {None, Tap, LongPress}` และ `LONG_PRESS_MS = 600`
+- fw: `Display::renderDetails(const Session&, const StatusInfo&, uint32_t nowMs)`
+- Tests: `toolFromEvent`, `displayCwd`, `buildSnapshot` มี cwd/tool, hook เก็บ tool/cwd; core `test_parse_optional_details`, `test_format_age`, `test_gesture_tap`, `test_gesture_long_press_once`
+
 ### Task 8: ติดตั้ง hook และทดสอบจริงแบบ end-to-end
 
 **Files:**

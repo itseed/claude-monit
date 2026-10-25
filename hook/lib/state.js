@@ -63,8 +63,38 @@ function buildSnapshot(sessions, nowMs) {
     now: nowMs,
     sessions: [...sessions]
       .sort((a, b) => a.created_at - b.created_at)
-      .map((s) => ({ id: s.session_id, name: s.name, state: s.state, updated_at: s.updated_at })),
+      .map((s) => ({
+        id: s.session_id,
+        name: s.name,
+        state: s.state,
+        updated_at: s.updated_at,
+        cwd: s.cwd || '',
+        tool: s.tool || '',
+      })),
   };
+}
+
+const MAX_TOOL = 20;
+const MAX_CWD = 40;
+
+/** Tool the session is about to use / asking permission for, if the event says. */
+function toolFromEvent(evt) {
+  const name = evt && evt.hook_event_name;
+  let tool;
+  if (name === 'PreToolUse' || name === 'PermissionRequest') tool = evt.tool_name;
+  else if (name === 'Notification') {
+    const m = /permission to use (\S+)/i.exec(evt.message || '');
+    tool = m && m[1];
+  }
+  return tool ? String(tool).replace(/[^\x21-\x7e]+/g, '?').slice(0, MAX_TOOL) : undefined;
+}
+
+/** `~/…` path, ASCII only, at most 40 chars keeping the tail. */
+function displayCwd(cwd, home) {
+  if (!cwd) return '';
+  let p = home && (cwd === home || cwd.startsWith(`${home}/`)) ? `~${cwd.slice(home.length)}` : cwd;
+  p = p.replace(/[^\x20-\x7e]+/g, '?');
+  return p.length > MAX_CWD ? `...${p.slice(p.length - (MAX_CWD - 3))}` : p;
 }
 
 /** Board address: env CLAUDE_MONIT_HOST > config.json host > claude-monit.local. */
@@ -86,4 +116,6 @@ module.exports = {
   prune,
   buildSnapshot,
   resolveHostConfig,
+  toolFromEvent,
+  displayCwd,
 };

@@ -65,11 +65,43 @@ void loop() {
 #include "net.h"
 #include "snapshot.h"
 #include "touch.h"
+#include "details.h"
 #include "weather_task.h"
 #include <WiFi.h>
 
 static char shownIds[MAX_VISIBLE][40];  // ids in the slots last drawn, for touch
 static int shownCount = 0;
+static TouchGesture gesture;
+static char detailsId[40] = "";  // session shown full-screen after a long press
+static uint32_t detailsSince = 0;
+constexpr uint32_t DETAILS_TIMEOUT_MS = 15000;
+
+static const Session* findSession(const char* id) {
+  const Session* v[MAX_SESSIONS];
+  const int n = store.visible(v, MAX_SESSIONS);
+  for (int i = 0; i < n; i++)
+    if (!strcmp(v[i]->id, id)) return v[i];
+  return nullptr;
+}
+
+static void handleTouch(uint32_t now) {
+  int x = 0, y = 0;
+  const bool touched = touchSample(x, y);
+  const TouchEvent ev = gesture.update(touched, x, y, now);
+  if (ev == TouchEvent::None) return;
+  if (detailsId[0]) {  // any touch closes the details view
+    if (ev == TouchEvent::Tap) detailsId[0] = '\0';
+    return;
+  }
+  const int i = display.hitTest(gesture.x(), gesture.y());
+  if (i < 0 || i >= shownCount) return;
+  if (ev == TouchEvent::Tap) {
+    store.acknowledge(shownIds[i]);
+  } else {
+    memcpy(detailsId, shownIds[i], sizeof(detailsId));
+    detailsSince = now;
+  }
+}
 
 static bool onSnapshot(const char* body, size_t len) {
   static Snapshot s;  // ~1.3 KB, keep off the stack
@@ -149,18 +181,21 @@ void loop() {
     store.expire(now);
   }
 
-  int tx, ty;
-  if (touchRead(tx, ty)) {
-    const int i = display.hitTest(tx, ty);
-    if (i >= 0 && i < shownCount) store.acknowledge(shownIds[i]);
-  }
+  handleTouch(now);
 
   updateLed(now);
 
   if (now - lastFrame >= 66) {  // ~15 fps
     lastFrame = now;
     const StatusInfo st = currentStatus(now);
-    if (store.count() == 0) {
+    const Session* detail = detailsId[0] ? findSession(detailsId) : nullptr;
+    if (detailsId[0] && (!detail || now - detailsSince > DETAILS_TIMEOUT_MS)) {
+      detailsId[0] = '\0';
+      detail = nullptr;
+    }
+    if (detail) {
+      display.renderDetails(*detail, st, now);
+    } else if (store.count() == 0) {
       shownCount = 0;
       display.renderEmpty("claude-monit.local", netLocalIp().c_str(), st, now);
     } else {

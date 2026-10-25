@@ -32,6 +32,8 @@ bool SessionStore::applySnapshot(const Snapshot& s, uint32_t nowMs) {
     Session& d = next[n++];
     memcpy(d.id, e.id, sizeof(d.id));
     memcpy(d.name, e.name, sizeof(d.name));
+    memcpy(d.cwd, e.cwd, sizeof(d.cwd));
+    memcpy(d.tool, e.tool, sizeof(d.tool));
     d.state = e.state;
     d.updatedAt = e.updatedAt;
     uint64_t age = s.now > e.updatedAt ? s.now - e.updatedAt : 0;

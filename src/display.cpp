@@ -1,6 +1,7 @@
 #include "display.h"
 #include <string.h>
 #include "clawd.h"
+#include "details.h"
 #include "icons.h"
 
 namespace {
@@ -181,6 +182,45 @@ void Display::renderEmpty(const char* host, const char* ip, const StatusInfo& st
   spr_.setTextDatum(TC_DATUM);
   spr_.setTextColor(IDLE_FG);
   spr_.drawString(where, SCREEN_W / 2, 222, 2);
+  spr_.pushSprite(0, 0);
+}
+
+void Display::renderDetails(const Session& s, const StatusInfo& st, uint32_t nowMs) {
+  last_ = computeLayout(0);
+  spr_.fillSprite(BG);
+  if (s.state == State::Waiting) spr_.fillRect(0, STATUS_BAR_H, SCREEN_W, SCREEN_H - STATUS_BAR_H, WAIT_BG);
+  drawStatusBar(st);
+
+  const int scale = 6;
+  const int sx = 14, sy = STATUS_BAR_H + 30 + CLAWD_MAX_LIFT * scale;
+  drawClawd(spr_, sx, sy, scale, s.state, clawdFrame(s.state, nowMs), s.state == State::Idle);
+
+  const int tx = sx + CLAWD_W * scale + 14, tw = SCREEN_W - tx - 6;
+  const int cx = tx + tw / 2;
+  char age[16], line[48];
+  formatAge(s.ageAtReceiptMs + (nowMs - s.receivedAtMs), age, sizeof(age));
+  switch (s.state) {
+    case State::Waiting: snprintf(line, sizeof(line), "waiting %s", age); break;
+    case State::Done: snprintf(line, sizeof(line), "done %s%s", age, strcmp(age, "just now") ? " ago" : ""); break;
+    case State::Working: snprintf(line, sizeof(line), "working %s", age); break;
+    default: snprintf(line, sizeof(line), "idle %s", age); break;
+  }
+
+  int y = STATUS_BAR_H + 36;
+  drawFitted(s.name, cx, y, tw, 4, TEXT);
+  y += 34;
+  drawFitted(line, cx, y, tw, 2, stateColor(s.state));
+  y += 24;
+  if (s.state == State::Waiting && s.tool[0]) {
+    snprintf(line, sizeof(line), "wants: %s", s.tool);
+    drawFitted(line, cx, y, tw, 2, WAIT_FG);
+    y += 24;
+  }
+  if (s.cwd[0]) drawFitted(s.cwd, cx, y, tw, 1, IDLE_FG);
+
+  spr_.setTextDatum(BC_DATUM);
+  spr_.setTextColor(IDLE_FG);
+  spr_.drawString("tap anywhere to close", SCREEN_W / 2, SCREEN_H - 4, 1);
   spr_.pushSprite(0, 0);
 }
 

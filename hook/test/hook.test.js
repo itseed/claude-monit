@@ -120,3 +120,13 @@ test('sends snapshot of all sessions to the board', async () => {
     server.close();
   }
 });
+
+test('PermissionRequest stores tool and short cwd', () => {
+  const home = tmpHome();
+  runHook(home, { hook_event_name: 'PermissionRequest', session_id: 's1', cwd: '/x/api', tool_name: 'Bash' });
+  const s = readSession(home, 's1');
+  assert.equal(s.tool, 'Bash');
+  assert.equal(s.cwd, '/x/api');
+  runHook(home, { hook_event_name: 'Stop', session_id: 's1', cwd: '/x/api' });
+  assert.equal(readSession(home, 's1').tool, 'Bash');
+});

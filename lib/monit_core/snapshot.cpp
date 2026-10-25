@@ -32,6 +32,8 @@ bool parseSnapshot(const char* json, size_t len, Snapshot& out) {
     if (!parseState(e["state"], d.state)) return false;
     copyStr(d.id, sizeof(d.id), id);
     copyStr(d.name, sizeof(d.name), e["name"] | id);
+    copyStr(d.cwd, sizeof(d.cwd), e["cwd"] | "");
+    copyStr(d.tool, sizeof(d.tool), e["tool"] | "");
     d.updatedAt = e["updated_at"].as<uint64_t>();
     s.count++;
   }

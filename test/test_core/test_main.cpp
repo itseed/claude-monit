@@ -7,6 +7,7 @@
 #include "led_pattern.h"
 #include "clock_fmt.h"
 #include "weather.h"
+#include "details.h"
 #include <time.h>
 
 static const uint32_t MIN_MS = 60UL * 1000;
@@ -336,6 +337,59 @@ void test_parse_weather() {
   TEST_ASSERT_FALSE(b.valid);
 }
 
+// ---- details / gestures ----
+
+void test_parse_optional_details() {
+  const char* json =
+      "{\"now\":5,\"sessions\":["
+      "{\"id\":\"a\",\"name\":\"api\",\"state\":\"waiting\",\"updated_at\":4,\"cwd\":\"~/x/api\",\"tool\":\"Bash\"},"
+      "{\"id\":\"b\",\"name\":\"web\",\"state\":\"idle\",\"updated_at\":4}]}";
+  Snapshot s;
+  TEST_ASSERT_TRUE(parseSnapshot(json, strlen(json), s));
+  TEST_ASSERT_EQUAL_STRING("~/x/api", s.entries[0].cwd);
+  TEST_ASSERT_EQUAL_STRING("Bash", s.entries[0].tool);
+  TEST_ASSERT_EQUAL_STRING("", s.entries[1].cwd);
+  TEST_ASSERT_EQUAL_STRING("", s.entries[1].tool);
+  SessionStore store;
+  store.applySnapshot(s, 0);
+  TEST_ASSERT_EQUAL_STRING("Bash", find(store, "a")->tool);
+  TEST_ASSERT_EQUAL_STRING("~/x/api", find(store, "a")->cwd);
+}
+
+void test_format_age() {
+  char buf[16];
+  formatAge(0, buf, sizeof(buf));
+  TEST_ASSERT_EQUAL_STRING("just now", buf);
+  formatAge(59 * 1000, buf, sizeof(buf));
+  TEST_ASSERT_EQUAL_STRING("just now", buf);
+  formatAge(5 * MIN_MS + 30000, buf, sizeof(buf));
+  TEST_ASSERT_EQUAL_STRING("5 min", buf);
+  formatAge(2 * HOUR_MS + 10 * MIN_MS, buf, sizeof(buf));
+  TEST_ASSERT_EQUAL_STRING("2 h 10 min", buf);
+  formatAge(3 * HOUR_MS, buf, sizeof(buf));
+  TEST_ASSERT_EQUAL_STRING("3 h", buf);
+}
+
+void test_gesture_tap() {
+  TouchGesture g;
+  TEST_ASSERT_TRUE(g.update(true, 10, 20, 1000) == TouchEvent::None);
+  TEST_ASSERT_TRUE(g.update(true, 12, 22, 1200) == TouchEvent::None);
+  TEST_ASSERT_TRUE(g.update(false, 0, 0, 1300) == TouchEvent::Tap);
+  TEST_ASSERT_EQUAL(10, g.x());  // position where the press started
+  TEST_ASSERT_EQUAL(20, g.y());
+  TEST_ASSERT_TRUE(g.update(false, 0, 0, 1400) == TouchEvent::None);
+}
+
+void test_gesture_long_press_once() {
+  TouchGesture g;
+  g.update(true, 50, 60, 1000);
+  TEST_ASSERT_TRUE(g.update(true, 50, 60, 1000 + LONG_PRESS_MS - 1) == TouchEvent::None);
+  TEST_ASSERT_TRUE(g.update(true, 50, 60, 1000 + LONG_PRESS_MS) == TouchEvent::LongPress);
+  TEST_ASSERT_EQUAL(50, g.x());
+  TEST_ASSERT_TRUE(g.update(true, 50, 60, 2000) == TouchEvent::None);
+  TEST_ASSERT_TRUE(g.update(false, 0, 0, 2100) == TouchEvent::None);  // no tap after long press
+}
+
 int main() {
   UNITY_BEGIN();
   RUN_TEST(test_parse_valid);
@@ -363,5 +417,9 @@ int main() {
   RUN_TEST(test_wifi_bars);
   RUN_TEST(test_weather_icon_mapping);
   RUN_TEST(test_parse_weather);
+  RUN_TEST(test_parse_optional_details);
+  RUN_TEST(test_format_age);
+  RUN_TEST(test_gesture_tap);
+  RUN_TEST(test_gesture_long_press_once);
   return UNITY_END();
 }
