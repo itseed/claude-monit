@@ -7,6 +7,8 @@ const ACTIVE_TTL_MS = 30 * MIN; // working / idle
 const ALERT_TTL_MS = 8 * 60 * MIN; // waiting / done
 const DEFAULT_HOST = 'claude-monit.local';
 const MAX_NAME = 16; // fits a 3x2 slot in the board's small font
+const MAX_SNAPSHOT = 16; // the board keeps at most this many sessions
+const URGENCY = { waiting: 3, done: 2, working: 1, idle: 0 };
 
 const EVENT_STATES = {
   SessionStart: 'idle',
@@ -67,11 +69,15 @@ function prune(sessions, nowMs) {
   return { keep, drop };
 }
 
+/** The MAX_SNAPSHOT most urgent sessions (newest first within a state), in creation order. */
 function buildSnapshot(sessions, nowMs) {
   const names = deriveNames(sessions);
+  const chosen = [...sessions]
+    .sort((a, b) => (URGENCY[b.state] || 0) - (URGENCY[a.state] || 0) || b.updated_at - a.updated_at)
+    .slice(0, MAX_SNAPSHOT);
   return {
     now: nowMs,
-    sessions: [...sessions]
+    sessions: chosen
       .sort((a, b) => a.created_at - b.created_at)
       .map((s) => ({
         id: s.session_id,
@@ -120,6 +126,7 @@ module.exports = {
   ACTIVE_TTL_MS,
   ALERT_TTL_MS,
   DEFAULT_HOST,
+  MAX_SNAPSHOT,
   eventToState,
   sanitizeName,
   deriveNames,

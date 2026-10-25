@@ -6,24 +6,41 @@
 Display display;
 SessionStore store;
 
+#include "anim.h"
+#include "led.h"
+
+static void updateLed(uint32_t now) {
+  static LedMode mode = LedMode::Off;
+  static uint32_t gen = 0, since = 0;
+  const LedMode m = store.ledMode();
+  if (m != mode || store.doneGeneration() != gen) {
+    mode = m;
+    gen = store.doneGeneration();
+    since = now;
+  }
+  ledSet(ledColorAt(mode, now - since));
+}
+
 #ifdef DEMO_MODE
 // Cycles through every layout and state with fake sessions.
 static const char* DEMO_NAMES[] = {"api", "web", "mobile", "docs", "claude-monit", "agent-teams#2",
                                    "pms-extension", "fuse"};
-static const int DEMO_COUNTS[] = {0, 1, 2, 4, 6, 8};
-static const uint32_t DEMO_STEP_MS[] = {40000, 5000, 5000, 5000, 5000, 5000};  // full walk cycle on the clock
+// clock (LED off) -> one done session (slow green) -> one waiting (fast orange) -> grids
+static const int DEMO_COUNTS[] = {0, 1, 1, 2, 4, 6, 8};
+static const int DEMO_FIRST_STATE[] = {0, 1, 0, 0, 0, 0, 0};  // index into the state cycle
+static const uint32_t DEMO_STEP_MS[] = {40000, 8000, 8000, 5000, 5000, 5000, 32000};  // 8 sessions: 2 pages
 
-static void loadDemo(int count, uint32_t nowMs) {
+static void loadDemo(int count, int firstState, uint32_t nowMs) {
   Snapshot s{};
   s.now = 1000000 + nowMs;
-  const State states[] = {State::Waiting, State::Done, State::Working, State::Idle};
+  const State states[] = {State::Waiting, State::Done, State::Waiting, State::Working, State::Idle, State::Waiting};
   for (int i = 0; i < count; i++) {
     SnapshotEntry& e = s.entries[s.count++];
     snprintf(e.id, sizeof(e.id), "demo-%d", i);
     strncpy(e.name, DEMO_NAMES[i], sizeof(e.name) - 1);
-    e.state = states[i % 4];
-    // demo-0 has waited 20 min (sweat), demo-4 6 min (blinking frame)
-    e.updatedAt = s.now - (i == 0 ? 20UL * 60000 : i == 4 ? 6UL * 60000 : 0);
+    e.state = states[(i + firstState) % 6];
+    // demo-0 has waited 20 min (sweat), demo-5 6 min (blinking frame), demo-2 just started
+    e.updatedAt = s.now - (i == 0 ? 20UL * 60000 : i == 5 ? 6UL * 60000 : 0);
   }
   store.applySnapshot(s, nowMs);
 }
@@ -31,6 +48,7 @@ static void loadDemo(int count, uint32_t nowMs) {
 void setup() {
   Serial.begin(115200);
   display.begin();
+  ledBegin();
 }
 
 void loop() {
@@ -40,8 +58,9 @@ void loop() {
   if (step < 0 || now - lastStep > DEMO_STEP_MS[step]) {
     step = (step + 1) % (int)(sizeof(DEMO_COUNTS) / sizeof(DEMO_COUNTS[0]));
     lastStep = now;
-    loadDemo(DEMO_COUNTS[step], now);
+    loadDemo(DEMO_COUNTS[step], DEMO_FIRST_STATE[step], now);
   }
+  updateLed(now);
   if (now - lastFrame >= 66) {  // ~15 fps
     lastFrame = now;
     struct tm t {};  // fake clock: Sun 25 Oct 2026, 14:00 + uptime
@@ -51,19 +70,21 @@ void loop() {
     t.tm_wday = 0;
     t.tm_hour = 14 + (now / 3600000) % 10;
     t.tm_min = (now / 60000) % 60;
+    static Pager pager;
     StatusInfo st{formatClock(&t, (now / 500) % 2 == 0), {true, 31, (int)((now / 5000) % 4) * 30 + 1}, true, 3};
+    st.pages = store.pageCount();
+    st.page = pager.update(now, st.pages, store.ledMode() != LedMode::Off);
     if (store.count() == 0) {
       display.renderEmpty("claude-monit.local", "192.168.1.123", st, now);
     } else {
       const Session* v[MAX_VISIBLE];
-      int n = store.visible(v);
+      int n = store.page(st.page, v);
       display.renderSessions(v, n, st, now);
     }
   }
 }
 #else
 #include <ArduinoJson.h>
-#include "led.h"
 #include "net.h"
 #include "snapshot.h"
 #include "touch.h"
@@ -72,6 +93,7 @@ void loop() {
 #include <WiFi.h>
 
 static TouchGesture gesture;
+static Pager pager;
 static unsigned presses = 0;
 static char detailsId[40] = "";  // session shown full-screen after a long press
 static uint32_t detailsSince = 0;
@@ -86,14 +108,15 @@ static const Session* findSession(const char* id) {
 }
 
 // Without touch positions: tap = acknowledge everything (or close details),
-// long press = show details of the most urgent session, then the next one.
+// double tap = next page, long press = details of the most urgent session, then the next.
 static void handleTouch(uint32_t now) {
   const TouchEvent ev = gesture.update(touchPressed(), 0, 0, now);
   if (ev == TouchEvent::None) return;
   presses++;
-  if (ev == TouchEvent::Tap) {
-    if (detailsId[0]) detailsId[0] = '\0';
-    else store.acknowledgeAll();
+  if (ev == TouchEvent::Tap || ev == TouchEvent::DoubleTap) {
+    if (detailsId[0]) detailsId[0] = '\0';  // any tap closes the details view
+    else if (ev == TouchEvent::Tap) store.acknowledgeAll();
+    else pager.next(now, store.pageCount());
     return;
   }
   const Session* next = store.nextForDetails(detailsId);
@@ -138,17 +161,6 @@ static String statusJson() {
   return out;
 }
 
-static void updateLed(uint32_t now) {
-  static LedMode mode = LedMode::Off;
-  static uint32_t gen = 0, since = 0;
-  const LedMode m = store.ledMode();
-  if (m != mode || store.doneGeneration() != gen) {
-    mode = m;
-    gen = store.doneGeneration();
-    since = now;
-  }
-  ledSet(ledColorAt(mode, now - since));
-}
 
 static StatusInfo currentStatus(uint32_t now) {
   struct tm t;
@@ -187,7 +199,9 @@ void loop() {
 
   if (now - lastFrame >= 66) {  // ~15 fps
     lastFrame = now;
-    const StatusInfo st = currentStatus(now);
+    StatusInfo st = currentStatus(now);
+    st.pages = store.pageCount();
+    st.page = pager.update(now, st.pages, store.ledMode() != LedMode::Off);
     const Session* detail = detailsId[0] ? findSession(detailsId) : nullptr;
     if (detailsId[0] && (!detail || now - detailsSince > DETAILS_TIMEOUT_MS)) {
       detailsId[0] = '\0';
@@ -199,7 +213,7 @@ void loop() {
       display.renderEmpty("claude-monit.local", netLocalIp().c_str(), st, now);
     } else {
       const Session* v[MAX_VISIBLE];
-      display.renderSessions(v, store.visible(v), st, now);
+      display.renderSessions(v, store.page(st.page, v), st, now);
     }
   }
 }

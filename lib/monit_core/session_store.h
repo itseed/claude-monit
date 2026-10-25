@@ -55,7 +55,11 @@ class SessionStore {
   void expire(uint32_t nowMs);
   // Up to `max` sessions in snapshot order; when there are more than `max`,
   // keeps the most important ones (waiting > done > working > idle, newest first).
-  int visible(const Session** out, int max = MAX_VISIBLE) const;
+  int visible(const Session** out, int max = MAX_VISIBLE) const { return page(0, out, max); }
+  // Sessions are split into pages of `per`, most urgent first; each page is
+  // shown in snapshot order. Returns how many were written to `out`.
+  int page(int index, const Session** out, int per = MAX_VISIBLE) const;
+  int pageCount(int per = MAX_VISIBLE) const { return count_ <= per ? 1 : (count_ + per - 1) / per; }
   LedMode ledMode() const;
   uint32_t doneGeneration() const { return doneGen_; }
   int count() const { return count_; }

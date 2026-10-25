@@ -18,3 +18,19 @@ constexpr uint32_t NAP_MS = 8000;
 constexpr uint32_t WALK_CYCLE_MS = 2 * WALK_MS + LOOK_MS + NAP_MS;
 
 WalkPose walkPose(uint32_t nowMs, int xMin, int xMax);
+
+// Auto-advancing pages when there are more sessions than slots.
+constexpr uint32_t PAGE_MS = 8000;
+constexpr uint32_t URGENT_PAGE_MS = 15000;  // first page (holds waiting/done) stays longer
+
+class Pager {
+ public:
+  // Current page for `pages` pages; `urgent` = something needs attention.
+  int update(uint32_t nowMs, int pages, bool urgent);
+  void next(uint32_t nowMs, int pages);  // manual advance (double tap)
+
+ private:
+  int page_ = 0;
+  uint32_t since_ = 0;
+  bool started_ = false;
+};

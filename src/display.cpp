@@ -107,9 +107,10 @@ void Display::drawCell(const Cell& c, const Session& s, int scale, int font, uin
   const int sy = top + lift;
   const bool idle = s.state == State::Idle;
   const int urgency = s.state == State::Waiting ? urgencyLevel(s.ageAtReceiptMs + (nowMs - s.receivedAtMs)) : 0;
-  if (urgency >= 1 && (nowMs / 250) % 2) {  // been waiting a while: blinking frame
+  if (s.state == State::Waiting) {  // every waiting slot gets a full orange frame
+    const bool thick = urgency >= 1 && (nowMs / 250) % 2;  // waiting 5+ min: thicker, blinking
     spr_.drawRect(c.x, c.y, c.w, c.h, WAIT_FG);
-    spr_.drawRect(c.x + 1, c.y + 1, c.w - 2, c.h - 2, WAIT_FG);
+    if (thick) spr_.drawRect(c.x + 1, c.y + 1, c.w - 2, c.h - 2, WAIT_FG);
   }
   drawClawd(spr_, sx, sy, scale, s.state, clawdFrame(s.state, nowMs, urgency >= 1), idle);
   if (urgency >= 2) {  // sweat drop sliding down the left side of the head
@@ -157,6 +158,11 @@ void Display::drawStatusBar(const StatusInfo& st) {
   if (st.weather.valid) {
     drawWeatherIcon(spr_, 130, 1, 2, weatherIconFor(st.weather.code));
     drawTemp(st.weather, 150, 1, 2, TL_DATUM);
+  }
+  for (int i = 0; i < st.pages && st.pages > 1; i++) {  // page dots
+    const int x = 214 - (st.pages - 1) * 4 + i * 8;
+    if (i == st.page) spr_.fillCircle(x, 8, 2, TEXT);
+    else spr_.drawCircle(x, 8, 2, IDLE_FG);
   }
   drawWifiBars(spr_, 238, 2, st.wifiUp, st.wifiBars);
   spr_.setTextColor(TEXT);

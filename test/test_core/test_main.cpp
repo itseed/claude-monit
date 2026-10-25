@@ -397,18 +397,41 @@ void test_gesture_tap() {
   TouchGesture g;
   TEST_ASSERT_TRUE(g.update(true, 10, 20, 1000) == TouchEvent::None);
   TEST_ASSERT_TRUE(g.update(true, 12, 22, 1200) == TouchEvent::None);
-  TEST_ASSERT_TRUE(g.update(false, 0, 0, 1300) == TouchEvent::Tap);
+  TEST_ASSERT_TRUE(g.update(false, 0, 0, 1300) == TouchEvent::None);  // might become a double tap
   TEST_ASSERT_EQUAL(10, g.x());  // position where the press started
   TEST_ASSERT_EQUAL(20, g.y());
-  TEST_ASSERT_TRUE(g.update(false, 0, 0, 1400) == TouchEvent::None);
+  TEST_ASSERT_TRUE(g.update(false, 0, 0, 1300 + DOUBLE_TAP_MS - 1) == TouchEvent::None);
+  TEST_ASSERT_TRUE(g.update(false, 0, 0, 1300 + DOUBLE_TAP_MS) == TouchEvent::Tap);
+  TEST_ASSERT_TRUE(g.update(false, 0, 0, 2000) == TouchEvent::None);
+}
+
+void test_gesture_double_tap() {
+  TouchGesture g;
+  g.update(true, 0, 0, 1000);
+  TEST_ASSERT_TRUE(g.update(false, 0, 0, 1100) == TouchEvent::None);
+  TEST_ASSERT_TRUE(g.update(true, 0, 0, 1200) == TouchEvent::None);
+  TEST_ASSERT_TRUE(g.update(false, 0, 0, 1300) == TouchEvent::DoubleTap);
+  TEST_ASSERT_TRUE(g.update(false, 0, 0, 3000) == TouchEvent::None);  // no extra Tap afterwards
+}
+
+void test_gesture_hold_after_tap_is_long_press() {
+  TouchGesture g;
+  g.update(true, 0, 0, 1000);
+  g.update(false, 0, 0, 1100);
+  g.update(true, 0, 0, 1200);
+  TEST_ASSERT_TRUE(g.update(true, 0, 0, 1200 + LONG_PRESS_MS) == TouchEvent::LongPress);
+  TEST_ASSERT_TRUE(g.update(false, 0, 0, 2500) == TouchEvent::None);
+  TEST_ASSERT_TRUE(g.update(false, 0, 0, 4000) == TouchEvent::None);
 }
 
 void test_gesture_ignores_glitch() {
   TouchGesture g;
   g.update(true, 0, 0, 1000);
   TEST_ASSERT_TRUE(g.update(false, 0, 0, 1000 + MIN_PRESS_MS - 1) == TouchEvent::None);
+  TEST_ASSERT_TRUE(g.update(false, 0, 0, 1500) == TouchEvent::None);  // glitch left no pending tap
   g.update(true, 0, 0, 2000);
-  TEST_ASSERT_TRUE(g.update(false, 0, 0, 2000 + MIN_PRESS_MS) == TouchEvent::Tap);
+  g.update(false, 0, 0, 2000 + MIN_PRESS_MS);
+  TEST_ASSERT_TRUE(g.update(false, 0, 0, 2000 + MIN_PRESS_MS + DOUBLE_TAP_MS) == TouchEvent::Tap);
 }
 
 void test_acknowledge_all() {
@@ -501,6 +524,57 @@ void test_walk_cycle() {
   TEST_ASSERT_EQUAL(lo, p.x);
 }
 
+// ---- paging ----
+
+void test_pages_put_urgent_first() {
+  SessionStore store;
+  store.applySnapshot(snap(1000, {
+                                     entry("a", State::Idle, 900), entry("b", State::Working, 900),
+                                     entry("c", State::Idle, 900), entry("d", State::Idle, 900),
+                                     entry("e", State::Working, 900), entry("f", State::Idle, 800),
+                                     entry("g", State::Waiting, 900), entry("h", State::Done, 900),
+                                 }),
+                      0);
+  TEST_ASSERT_EQUAL(2, store.pageCount());
+  const Session* v[MAX_VISIBLE];
+  TEST_ASSERT_EQUAL(6, store.page(0, v));
+  const char* first[] = {"a", "b", "c", "e", "g", "h"};  // most urgent six, shown in snapshot order
+  for (int i = 0; i < 6; i++) TEST_ASSERT_EQUAL_STRING(first[i], v[i]->id);
+  TEST_ASSERT_EQUAL(2, store.page(1, v));
+  TEST_ASSERT_EQUAL_STRING("d", v[0]->id);
+  TEST_ASSERT_EQUAL_STRING("f", v[1]->id);
+  TEST_ASSERT_EQUAL(0, store.page(2, v));
+}
+
+void test_single_page() {
+  SessionStore store;
+  TEST_ASSERT_EQUAL(1, store.pageCount());
+  store.applySnapshot(snap(1000, {entry("x", State::Idle, 900), entry("y", State::Waiting, 900)}), 0);
+  TEST_ASSERT_EQUAL(1, store.pageCount());
+  const Session* v[MAX_VISIBLE];
+  TEST_ASSERT_EQUAL(2, store.page(0, v));
+  TEST_ASSERT_EQUAL_STRING("x", v[0]->id);
+}
+
+void test_pager_dwell_and_manual_next() {
+  Pager p;
+  TEST_ASSERT_EQUAL(0, p.update(0, 2, false));
+  TEST_ASSERT_EQUAL(0, p.update(PAGE_MS - 1, 2, false));
+  TEST_ASSERT_EQUAL(1, p.update(PAGE_MS, 2, false));
+  TEST_ASSERT_EQUAL(0, p.update(2 * PAGE_MS, 2, false));
+  // with something urgent, the first page stays longer
+  TEST_ASSERT_EQUAL(0, p.update(2 * PAGE_MS + PAGE_MS, 2, true));
+  TEST_ASSERT_EQUAL(1, p.update(2 * PAGE_MS + URGENT_PAGE_MS, 2, true));
+  // double tap
+  p.next(50000, 2);
+  TEST_ASSERT_EQUAL(0, p.update(50000, 2, false));
+  TEST_ASSERT_EQUAL(0, p.update(50000 + PAGE_MS - 1, 2, false));  // timer restarted
+  p.next(60000, 2);
+  TEST_ASSERT_EQUAL(1, p.update(60000, 2, false));
+  // pages disappear
+  TEST_ASSERT_EQUAL(0, p.update(60001, 1, false));
+}
+
 int main() {
   UNITY_BEGIN();
   RUN_TEST(test_parse_valid);
@@ -535,10 +609,15 @@ int main() {
   RUN_TEST(test_gesture_tap);
   RUN_TEST(test_gesture_long_press_once);
   RUN_TEST(test_gesture_ignores_glitch);
+  RUN_TEST(test_gesture_double_tap);
+  RUN_TEST(test_gesture_hold_after_tap_is_long_press);
   RUN_TEST(test_acknowledge_all);
   RUN_TEST(test_next_for_details_by_urgency);
   RUN_TEST(test_entered_at_tracks_state_changes);
   RUN_TEST(test_urgency_levels);
   RUN_TEST(test_walk_cycle);
+  RUN_TEST(test_pages_put_urgent_first);
+  RUN_TEST(test_single_page);
+  RUN_TEST(test_pager_dwell_and_manual_next);
   return UNITY_END();
 }

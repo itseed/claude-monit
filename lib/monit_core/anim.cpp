@@ -18,3 +18,27 @@ WalkPose walkPose(uint32_t nowMs, int xMin, int xMax) {
   }
   return {xMin, ClawdPose::Sleep, false, 0};
 }
+
+int Pager::update(uint32_t nowMs, int pages, bool urgent) {
+  if (!started_) {
+    started_ = true;
+    since_ = nowMs;
+  }
+  if (pages <= 1 || page_ >= pages) {
+    if (page_ != 0) since_ = nowMs;
+    page_ = 0;
+    if (pages <= 1) return 0;
+  }
+  const uint32_t dwell = (page_ == 0 && urgent) ? URGENT_PAGE_MS : PAGE_MS;
+  if (nowMs - since_ >= dwell) {
+    page_ = (page_ + 1) % pages;
+    since_ = nowMs;
+  }
+  return page_;
+}
+
+void Pager::next(uint32_t nowMs, int pages) {
+  started_ = true;
+  page_ = pages > 1 ? (page_ + 1) % pages : 0;
+  since_ = nowMs;
+}

@@ -10,6 +10,7 @@ struct StatusInfo {
   Weather weather;
   bool wifiUp;
   int wifiBars;
+  int page = 0, pages = 1;  // dots in the status bar when sessions span pages
 };
 
 class Display {

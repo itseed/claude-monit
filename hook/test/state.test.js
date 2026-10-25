@@ -2,7 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const {
   eventToState, sanitizeName, deriveNames, prune, buildSnapshot, resolveHostConfig,
-  toolFromEvent, displayCwd,
+  toolFromEvent, displayCwd, MAX_SNAPSHOT,
 } = require('../lib/state');
 
 const MIN = 60 * 1000;
@@ -129,4 +129,21 @@ test('displayCwd shortens home, strips non-ASCII, keeps the tail', () => {
   assert.ok(long.startsWith('...'));
   assert.ok(long.endsWith('b'.repeat(20)));
   assert.equal(displayCwd(undefined, '/Users/k'), '');
+});
+
+test('buildSnapshot keeps the 16 most urgent sessions, in creation order', () => {
+  const sessions = [];
+  for (let i = 0; i < 20; i++) {
+    sessions.push({ session_id: `s${i}`, base: `p${i}`, state: 'idle', created_at: i, updated_at: 100 + i });
+  }
+  sessions[18].state = 'waiting'; // opened late, but must not be cut
+  sessions[19].state = 'done';
+  const snap = buildSnapshot(sessions, 1000);
+  assert.equal(snap.sessions.length, MAX_SNAPSHOT);
+  const ids = snap.sessions.map((s) => s.id);
+  assert.ok(ids.includes('s18'));
+  assert.ok(ids.includes('s19'));
+  assert.ok(!ids.includes('s0') && !ids.includes('s1') && !ids.includes('s2') && !ids.includes('s3'));
+  const created = snap.sessions.map((s) => Number(s.id.slice(1)));
+  assert.deepEqual(created, [...created].sort((a, b) => a - b));
 });
