@@ -6,6 +6,11 @@
 #include <WiFiManager.h>
 #include "net.h"
 
+// POSIX timezone, set in platformio.ini (defaults to Bangkok, UTC+7).
+#ifndef TZ_POSIX
+#define TZ_POSIX "ICT-7"
+#endif
+
 namespace {
 constexpr const char* AP_NAME = "claude-monit-setup";
 constexpr const char* HOSTNAME = "claude-monit";
@@ -47,7 +52,7 @@ void netBegin(Display& d) {
     ESP.restart();
   }
 
-  configTzTime("ICT-7", "pool.ntp.org", "time.google.com");
+  configTzTime(TZ_POSIX, "pool.ntp.org", "time.google.com");
   if (MDNS.begin(HOSTNAME)) MDNS.addService("http", "tcp", 80);
 
   server.on("/", HTTP_GET, [] { server.send(200, "text/plain", "claude-monit ok"); });
