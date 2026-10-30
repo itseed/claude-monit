@@ -164,3 +164,7 @@ The board's HTTP endpoints have no authentication. Anyone on the same network ca
 ## Disclaimer
 
 claude-monit is a personal project. It is not made by, affiliated with or endorsed by Anthropic. Claude, Claude Code and Clawd are Anthropic's.
+
+## License
+
+[MIT](LICENSE)
