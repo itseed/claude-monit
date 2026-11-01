@@ -12,6 +12,15 @@ constexpr uint32_t ALERT_TTL_MS = 8UL * 3600 * 1000;  // waiting/done
 // a bigger jump back means the sender's clock changed, so start over.
 constexpr uint32_t STALE_WINDOW_MS = 60UL * 1000;
 
+// Plan usage limits for the whole account (from Claude Code's status line).
+// -1 = unknown; reset times are Unix seconds, 0 = unknown.
+struct Limits {
+  int8_t h5 = -1;  // 5-hour session limit, % used
+  int8_t d7 = -1;  // 7-day limit, % used
+  uint32_t h5Reset = 0;
+  uint32_t d7Reset = 0;
+};
+
 struct SnapshotEntry {
   char id[40];
   char name[24];
@@ -19,12 +28,14 @@ struct SnapshotEntry {
   char tool[24];
   State state;
   uint64_t updatedAt;
+  int8_t ctx = -1;  // context window % used, -1 = unknown
 };
 
 struct Snapshot {
   uint64_t now;
   int count;
   SnapshotEntry entries[MAX_SESSIONS];
+  Limits limits;
 };
 
 struct Session {
@@ -38,6 +49,7 @@ struct Session {
   uint32_t ageAtReceiptMs;
   uint32_t receivedAtMs;
   uint32_t enteredAtMs;  // board time when the shown state last changed (for transition effects)
+  int8_t ctx = -1;       // context window % used, -1 = unknown
 };
 
 // Time since the session's last event. `nowMs` may be slightly older than the
@@ -70,6 +82,7 @@ class SessionStore {
   LedMode ledMode() const;
   uint32_t doneGeneration() const { return doneGen_; }
   int count() const { return count_; }
+  const Limits& limits() const { return limits_; }
 
  private:
   struct Ack {
@@ -83,6 +96,7 @@ class SessionStore {
   uint64_t lastNow_ = 0;
   bool hasSnapshot_ = false;
   uint32_t doneGen_ = 0;
+  Limits limits_{};
 
   const Ack* findAck(const char* id) const;
   int rankByUrgency(int* idx) const;

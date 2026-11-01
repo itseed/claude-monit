@@ -9,6 +9,7 @@
 #include "weather.h"
 #include "details.h"
 #include "anim.h"
+#include "usage.h"
 #include <time.h>
 
 static const uint32_t MIN_MS = 60UL * 1000;
@@ -593,8 +594,101 @@ void test_pager_dwell_and_manual_next() {
   TEST_ASSERT_EQUAL(0, p.update(60001, 1, false));
 }
 
+// ---- context + plan limits ----
+
+void test_parse_ctx_and_limits() {
+  const char* json =
+      "{\"now\":5000,\"limits\":{\"h5\":32,\"h5_reset\":1793557200,\"d7\":18.6},\"sessions\":["
+      "{\"id\":\"a\",\"state\":\"working\",\"updated_at\":4000,\"ctx\":45},"
+      "{\"id\":\"b\",\"state\":\"idle\",\"updated_at\":4000,\"ctx\":250},"
+      "{\"id\":\"c\",\"state\":\"idle\",\"updated_at\":4000}]}";
+  Snapshot s;
+  TEST_ASSERT_TRUE(parseSnapshot(json, strlen(json), s));
+  TEST_ASSERT_EQUAL(45, s.entries[0].ctx);
+  TEST_ASSERT_EQUAL(100, s.entries[1].ctx);  // clamped
+  TEST_ASSERT_EQUAL(-1, s.entries[2].ctx);   // absent
+  TEST_ASSERT_EQUAL(32, s.limits.h5);
+  TEST_ASSERT_EQUAL_UINT32(1793557200u, s.limits.h5Reset);
+  TEST_ASSERT_EQUAL(19, s.limits.d7);
+  TEST_ASSERT_EQUAL_UINT32(0, s.limits.d7Reset);
+}
+
+void test_parse_without_limits() {
+  const char* json = "{\"now\":1,\"sessions\":[]}";
+  Snapshot s;
+  TEST_ASSERT_TRUE(parseSnapshot(json, strlen(json), s));
+  TEST_ASSERT_EQUAL(-1, s.limits.h5);
+  TEST_ASSERT_EQUAL(-1, s.limits.d7);
+}
+
+void test_store_keeps_ctx_and_limits() {
+  SessionStore store;
+  Snapshot s = snap(1000, {entry("a", State::Working, 900)});
+  s.entries[0].ctx = 45;
+  s.limits.h5 = 32;
+  store.applySnapshot(s, 0);
+  TEST_ASSERT_EQUAL(45, find(store, "a")->ctx);
+  TEST_ASSERT_EQUAL(32, store.limits().h5);
+  store.applySnapshot(snap(2000, {entry("a", State::Working, 1900)}), 10);
+  TEST_ASSERT_EQUAL(-1, find(store, "a")->ctx);
+  TEST_ASSERT_EQUAL(-1, store.limits().h5);
+}
+
+void test_limit_resets_to_zero_after_reset_time() {
+  TEST_ASSERT_EQUAL(32, limitNow(32, 2000, 1999));
+  TEST_ASSERT_EQUAL(0, limitNow(32, 2000, 2000));
+  TEST_ASSERT_EQUAL(32, limitNow(32, 2000, 0));  // clock not synced
+  TEST_ASSERT_EQUAL(32, limitNow(32, 0, 5000));  // reset unknown
+  TEST_ASSERT_EQUAL(-1, limitNow(-1, 2000, 5000));
+}
+
+void test_usage_level_and_label() {
+  TEST_ASSERT_EQUAL(0, usageLevel(49));
+  TEST_ASSERT_EQUAL(1, usageLevel(50));
+  TEST_ASSERT_EQUAL(2, usageLevel(80));
+  char buf[16];
+  formatLimit("5h", 32, buf, sizeof(buf));
+  TEST_ASSERT_EQUAL_STRING("5h 32%", buf);
+  formatLimit("7d", -1, buf, sizeof(buf));
+  TEST_ASSERT_EQUAL_STRING("", buf);
+}
+
+void test_countdown() {
+  char b[16];
+  formatCountdown(2 * 3600 + 15 * 60 + 30, b, sizeof(b));
+  TEST_ASSERT_EQUAL_STRING("2h 15m", b);
+  formatCountdown(45 * 60, b, sizeof(b));
+  TEST_ASSERT_EQUAL_STRING("45m", b);
+  formatCountdown(3 * 86400 + 4 * 3600 + 59, b, sizeof(b));
+  TEST_ASSERT_EQUAL_STRING("3d 4h", b);
+  formatCountdown(20, b, sizeof(b));
+  TEST_ASSERT_EQUAL_STRING("<1m", b);
+  formatCountdown(-1, b, sizeof(b));
+  TEST_ASSERT_EQUAL_STRING("", b);
+}
+
+void test_usage_page_is_last_and_only_with_limits() {
+  Limits none;
+  TEST_ASSERT_EQUAL(1, pagesWithUsage(1, none));
+  TEST_ASSERT_FALSE(isUsagePage(1, 1, none));
+  Limits l;
+  l.d7 = 18;
+  TEST_ASSERT_EQUAL(2, pagesWithUsage(1, l));
+  TEST_ASSERT_FALSE(isUsagePage(0, 1, l));
+  TEST_ASSERT_TRUE(isUsagePage(1, 1, l));
+  TEST_ASSERT_EQUAL(4, pagesWithUsage(3, l));
+  TEST_ASSERT_TRUE(isUsagePage(3, 3, l));
+}
+
 int main() {
   UNITY_BEGIN();
+RUN_TEST(test_parse_ctx_and_limits);
+RUN_TEST(test_parse_without_limits);
+RUN_TEST(test_store_keeps_ctx_and_limits);
+RUN_TEST(test_limit_resets_to_zero_after_reset_time);
+RUN_TEST(test_usage_level_and_label);
+RUN_TEST(test_countdown);
+RUN_TEST(test_usage_page_is_last_and_only_with_limits);
   RUN_TEST(test_parse_valid);
   RUN_TEST(test_parse_rejects_garbage);
   RUN_TEST(test_parse_truncates);

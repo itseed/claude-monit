@@ -28,6 +28,8 @@ class Pager {
   // Current page for `pages` pages; `urgent` = something needs attention.
   int update(uint32_t nowMs, int pages, bool urgent);
   void next(uint32_t nowMs, int pages);  // manual advance (double tap)
+  int current() const { return page_; }
+  int pages() const { return pages_; }
 
  private:
   int page_ = 0;

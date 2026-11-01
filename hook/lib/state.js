@@ -69,25 +69,34 @@ function prune(sessions, nowMs) {
   return { keep, drop };
 }
 
-/** The MAX_SNAPSHOT most urgent sessions (newest first within a state), in creation order. */
-function buildSnapshot(sessions, nowMs) {
+/**
+ * The MAX_SNAPSHOT most urgent sessions (newest first within a state), in
+ * creation order. `ctx` (context %) and `limits` are included only when known.
+ */
+function buildSnapshot(sessions, nowMs, limits) {
   const names = deriveNames(sessions);
   const chosen = [...sessions]
     .sort((a, b) => (URGENCY[b.state] || 0) - (URGENCY[a.state] || 0) || b.updated_at - a.updated_at)
     .slice(0, MAX_SNAPSHOT);
-  return {
+  const snap = {
     now: nowMs,
     sessions: chosen
       .sort((a, b) => a.created_at - b.created_at)
-      .map((s) => ({
-        id: s.session_id,
-        name: names[s.session_id],
-        state: s.state,
-        updated_at: s.updated_at,
-        cwd: s.cwd || '',
-        tool: s.tool || '',
-      })),
+      .map((s) => {
+        const out = {
+          id: s.session_id,
+          name: names[s.session_id],
+          state: s.state,
+          updated_at: s.updated_at,
+          cwd: s.cwd || '',
+          tool: s.tool || '',
+        };
+        if (Number.isInteger(s.ctx)) out.ctx = s.ctx;
+        return out;
+      }),
   };
+  if (limits && typeof limits === 'object' && Object.keys(limits).length) snap.limits = limits;
+  return snap;
 }
 
 const MAX_TOOL = 20;

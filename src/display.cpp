@@ -4,6 +4,7 @@
 #include "clawd.h"
 #include "details.h"
 #include "icons.h"
+#include "usage.h"
 
 namespace {
 constexpr uint16_t rgb(uint32_t hex) {
@@ -18,6 +19,7 @@ constexpr uint16_t DONE_FG = rgb(0x5fb36b);
 constexpr uint16_t WORK_FG = rgb(0x6a9bd8);
 constexpr uint16_t IDLE_FG = rgb(0x666666);
 constexpr uint16_t TEXT = rgb(0xf0eee6);
+constexpr uint16_t HOT_FG = rgb(0xe0564a);
 
 const char* stateLabel(State s) {
   switch (s) {
@@ -25,6 +27,15 @@ const char* stateLabel(State s) {
     case State::Done: return "done";
     case State::Working: return "working...";
     default: return "zzz";
+  }
+}
+
+// calm grey / warm orange / hot red, by how much of a limit or context is used
+uint16_t usageColor(int pct) {
+  switch (usageLevel(pct)) {
+    case 2: return HOT_FG;
+    case 1: return WAIT_FG;
+    default: return IDLE_FG;
   }
 }
 
@@ -101,7 +112,8 @@ void Display::drawCell(const Cell& c, const Session& s, int scale, int font, uin
   const int lineH = spr_.fontHeight(font) + 2;
   const int spriteH = CLAWD_H * scale;
   const int lift = CLAWD_MAX_LIFT * scale;
-  const int blockH = lift + spriteH + 4 + 2 * lineH;
+  const int barH = s.ctx >= 0 ? 7 : 0;  // context bar under the state label
+  const int blockH = lift + spriteH + 4 + 2 * lineH + barH;
   const int top = c.y + (c.h - blockH) / 2;
   const int sx = c.x + (c.w - CLAWD_W * scale) / 2;
   const int sy = top + lift;
@@ -131,6 +143,48 @@ void Display::drawCell(const Cell& c, const Session& s, int scale, int font, uin
   drawFitted(s.name, cx, textY, c.w - 8, font, idle ? IDLE_FG : TEXT);
   const bool blinkOff = s.state == State::Waiting && (nowMs / 500) % 2;
   if (!blinkOff) drawFitted(stateLabel(s.state), cx, textY + lineH, c.w - 8, font, stateColor(s.state));
+  if (s.ctx >= 0) drawCtxBar(s.ctx, cx, textY + 2 * lineH + 1, c.w - 12);
+}
+
+// [=====     ] 45%  - context window used, centred on cx.
+void Display::drawCtxBar(int ctx, int cx, int y, int maxW) {
+  char pct[6];
+  snprintf(pct, sizeof(pct), "%d%%", ctx);
+  const int tw = spr_.textWidth(pct, 1);
+  int bw = maxW - tw - 4;
+  if (bw > 90) bw = 90;
+  if (bw < 20) bw = 20;
+  const int x0 = cx - (bw + 4 + tw) / 2;
+  const uint16_t col = usageColor(ctx);
+  spr_.drawRect(x0, y, bw, 6, GRID);
+  const int fill = (bw - 2) * ctx / 100;
+  if (fill > 0) spr_.fillRect(x0 + 1, y + 1, fill, 4, col);
+  spr_.setTextColor(col);
+  spr_.setTextDatum(TL_DATUM);
+  spr_.drawString(pct, x0 + bw + 4, y - 1, 1);
+}
+
+// Plan limits in the status bar, between the date and the weather:
+// "5h 32%" over "7d 18%" in the small font (one line centred if only one is known).
+void Display::drawLimits(const StatusInfo& st) {
+  char a[12], b[12];
+  formatLimit("5h", st.h5, a, sizeof(a));
+  formatLimit("7d", st.d7, b, sizeof(b));
+  spr_.setTextDatum(TL_DATUM);
+  // right after the date, but never pushed into the weather icon at x=130
+  int x = 4 + spr_.textWidth(st.clk.date, 2) + 6;
+  const int w = spr_.textWidth(a, 1) > spr_.textWidth(b, 1) ? spr_.textWidth(a, 1) : spr_.textWidth(b, 1);
+  if (x + w > 128) x = 128 - w;
+  if (x < 4) x = 4;
+  if (a[0] && b[0]) {
+    spr_.setTextColor(usageColor(st.h5));
+    spr_.drawString(a, x, 0, 1);
+    spr_.setTextColor(usageColor(st.d7));
+    spr_.drawString(b, x, 9, 1);
+  } else if (a[0] || b[0]) {
+    spr_.setTextColor(usageColor(a[0] ? st.h5 : st.d7));
+    spr_.drawString(a[0] ? a : b, x, 5, 1);
+  }
 }
 
 void Display::drawTemp(const Weather& w, int x, int y, int font, uint8_t datum) {
@@ -155,6 +209,7 @@ void Display::drawStatusBar(const StatusInfo& st) {
   spr_.setTextColor(IDLE_FG);
   spr_.setTextDatum(TL_DATUM);
   spr_.drawString(st.clk.date, 4, 1, 2);
+  drawLimits(st);
   if (st.weather.valid) {
     drawWeatherIcon(spr_, 130, 1, 2, weatherIconFor(st.weather.code));
     drawTemp(st.weather, 150, 1, 2, TL_DATUM);
@@ -223,6 +278,20 @@ void Display::renderEmpty(const char* host, const char* ip, const StatusInfo& st
     drawWeatherIcon(spr_, x0, 172, 3, weatherIconFor(st.weather.code));
     drawTemp(st.weather, x0 + iconW + gap, 172, 4, TL_DATUM);
   }
+  if (st.h5 >= 0 || st.d7 >= 0) {
+    char a[24] = "", b[12] = "", line[48];
+    formatLimit("5h", st.h5, a, sizeof(a));
+    if (a[0] && st.h5Reset[0]) {
+      const size_t n = strlen(a);
+      snprintf(a + n, sizeof(a) - n, " (%s)", st.h5Reset);
+    }
+    formatLimit("7d", st.d7, b, sizeof(b));
+    snprintf(line, sizeof(line), "%s%s%s", a, a[0] && b[0] ? "    " : "", b);
+    const int hot = st.h5 > st.d7 ? st.h5 : st.d7;
+    spr_.setTextDatum(TC_DATUM);
+    spr_.setTextColor(usageColor(hot));
+    spr_.drawString(line, SCREEN_W / 2, 203, 2);
+  }
   char where[64];
   snprintf(where, sizeof(where), "%s  %s", host, ip);
   spr_.setTextDatum(TC_DATUM);
@@ -262,11 +331,84 @@ void Display::renderDetails(const Session& s, const StatusInfo& st, uint32_t now
     drawFitted(line, cx, y, tw, 2, WAIT_FG);
     y += 24;
   }
+  if (s.ctx >= 0) {
+    snprintf(line, sizeof(line), "context %d%%", s.ctx);
+    drawFitted(line, cx, y, tw, 2, usageColor(s.ctx));
+    y += 24;
+  }
   if (s.cwd[0]) drawFitted(s.cwd, cx, y, tw, 1, IDLE_FG);
 
   spr_.setTextDatum(BC_DATUM);
   spr_.setTextColor(IDLE_FG);
   spr_.drawString("tap: close    hold: next session", SCREEN_W / 2, SCREEN_H - 4, 1);
+  spr_.pushSprite(0, 0);
+}
+
+// "5-hour limit            32%"
+// [=========                    ]
+// resets 17:00 (in 2h 15m)
+int Display::drawLimitBlock(const char* label, int pct, const char* resetAt, const char* resetIn, int y) {
+  const int x = 12, w = SCREEN_W - 24;
+  spr_.setTextDatum(TL_DATUM);
+  spr_.setTextColor(TEXT);
+  spr_.drawString(label, x, y + 6, 2);
+  char num[8];
+  if (pct >= 0) snprintf(num, sizeof(num), "%d%%", pct);
+  else strcpy(num, "--");
+  const uint16_t col = pct >= 0 ? usageColor(pct) : IDLE_FG;
+  spr_.setTextDatum(TR_DATUM);
+  spr_.setTextColor(col);
+  spr_.drawString(num, x + w, y, 4);
+  const int by = y + 27;
+  spr_.drawRoundRect(x, by, w, 12, 3, GRID);
+  if (pct > 0) spr_.fillRoundRect(x + 2, by + 2, (w - 4) * pct / 100, 8, 2, col);
+  char line[48] = "no data yet";
+  if (pct >= 0) {
+    if (resetAt[0] && resetIn[0]) snprintf(line, sizeof(line), "resets %s  (in %s)", resetAt, resetIn);
+    else if (resetAt[0]) snprintf(line, sizeof(line), "resets %s", resetAt);
+    else line[0] = '\0';
+  }
+  spr_.setTextDatum(TL_DATUM);
+  spr_.setTextColor(IDLE_FG);
+  spr_.drawString(line, x, by + 16, 1);
+  return by + 28;
+}
+
+void Display::renderUsage(const Session* const* v, int n, const StatusInfo& st, uint32_t nowMs) {
+  (void)nowMs;
+  last_ = computeLayout(0);
+  spr_.fillSprite(BG);
+  drawStatusBar(st);
+  int y = STATUS_BAR_H + 4;
+  y = drawLimitBlock("5-hour limit", st.h5, st.h5Reset, st.h5In, y);
+  y = drawLimitBlock("Weekly limit", st.d7, st.d7Reset, st.d7In, y);
+
+  spr_.drawFastHLine(12, y, SCREEN_W - 24, GRID);
+  y += 5;
+  spr_.setTextDatum(TL_DATUM);
+  spr_.setTextColor(IDLE_FG);
+  spr_.drawString("context", 12, y, 1);
+  y += 12;
+  const int rows = n < 4 ? n : 4;
+  for (int i = 0; i < rows && y + 10 <= SCREEN_H; i++, y += 13) {
+    const Session& s = *v[i];
+    spr_.setTextDatum(TL_DATUM);
+    spr_.setTextColor(s.state == State::Idle ? IDLE_FG : TEXT);
+    char name[20];
+    snprintf(name, sizeof(name), "%.16s", s.name);
+    spr_.drawString(name, 12, y, 1);
+    const int bx = 120, bw = 140;
+    spr_.drawRect(bx, y, bw, 8, GRID);
+    if (s.ctx >= 0) {
+      const uint16_t col = usageColor(s.ctx);
+      if (s.ctx > 0) spr_.fillRect(bx + 1, y + 1, (bw - 2) * s.ctx / 100, 6, col);
+      char pct[6];
+      snprintf(pct, sizeof(pct), "%d%%", s.ctx);
+      spr_.setTextDatum(TR_DATUM);
+      spr_.setTextColor(col);
+      spr_.drawString(pct, SCREEN_W - 12, y, 1);
+    }
+  }
   spr_.pushSprite(0, 0);
 }
 
