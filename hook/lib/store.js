@@ -49,11 +49,41 @@ function write(dir, session) {
 }
 
 function remove(dir, id) {
-  try {
-    fs.unlinkSync(fileFor(dir, id));
-  } catch {
-    // already gone
+  for (const f of [fileFor(dir, id), fileFor(ctxDir(dir), id)]) {
+    try {
+      fs.unlinkSync(f);
+    } catch {
+      // already gone
+    }
   }
+}
+
+// Context % per session (from the status line) lives beside sessions/, not in
+// the session file, so status line and hook writes never overwrite each other.
+function ctxDir(dir) {
+  return path.join(path.dirname(dir), 'ctx');
+}
+
+function readCtx(dir, id) {
+  const c = readJson(fileFor(ctxDir(dir), id));
+  return c && Number.isInteger(c.ctx) ? c.ctx : null;
+}
+
+function writeCtx(dir, id, ctx) {
+  writeJsonAtomic(fileFor(ctxDir(dir), id), { ctx });
+}
+
+// Plan limits are per account: one file shared by every session.
+function limitsFile(dir) {
+  return path.join(path.dirname(dir), 'usage.json');
+}
+
+function readLimits(dir) {
+  return readJson(limitsFile(dir));
+}
+
+function writeLimits(dir, limits) {
+  writeJsonAtomic(limitsFile(dir), limits);
 }
 
 function readOne(dir, id) {
@@ -90,5 +120,6 @@ function readJson(file) {
 
 module.exports = {
   homeDir, sessionsDir, readAll, readOne, write, remove, readJson, writeJsonAtomic,
+  readCtx, writeCtx, readLimits, writeLimits,
   offlineUntil, markOffline, clearOffline,
 };

@@ -18,16 +18,21 @@ Claude Code sessions ──hooks──▶ hook/claude-monit-hook.js ──HTTP�
 | working | blue `working...` | bobs | off |
 | idle | dimmed `zzz` | sleeps | off |
 
+- **Context and plan limits (optional):** a bar under each Clawd shows how full its context window is, and the status bar shows the 5-hour and weekly plan limits (`5h 32%`, `7d 61%`). The last page in the rotation is a **plan usage** page: both limits as big bars with their reset times, and the context of the four most urgent sessions. Numbers turn orange at 50% and red at 80%. The details page shows the context %, and the desk clock shows the limits too. Needs the [status line tap](#optional-context-and-plan-limits).
 - **Status bar:** date, local weather (Open-Meteo, every 15 min), WiFi signal and time (NTP). Location and timezone are set in `platformio.ini` (Bangkok by default).
 - **No sessions:** the board turns into a desk clock, with Clawd strolling across, looking up at the clock and napping.
-- **Up to 6 slots per page.** With more sessions, pages advance every 8 s (15 s on page 1 while something waits), and dots in the status bar show the page. Waiting and done sessions are always on page 1.
+- **Up to 6 slots per page.** With more sessions (or once plan limits are known, which adds the usage page), pages advance every 8 s (15 s on page 1 while something waits), and dots in the status bar show the page. Waiting and done sessions are always on page 1.
 - **Effects:** a `!` bubble pops up when a session starts waiting, and a pixel burst plays when one finishes. After 5 minutes of waiting, Clawd waves faster and the frame blinks; after 15 minutes it starts sweating.
 
 | A new permission request and a finished session | More than six sessions: page dots | Nothing open: desk clock |
 |---|---|---|
 | <img src="docs/images/sessions-3.png" width="260" alt="'!' bubble over a waiting Clawd and a pixel burst around a finished one"> | <img src="docs/images/sessions-8-pages.png" width="260" alt="Page 1 of 2 with the most urgent sessions"> | <img src="docs/images/clock.gif" width="260" alt="Clawd strolling above a big desk clock with date and weather"> |
 
-Every image is a real frame read from the board's frame buffer. To refresh them, run `python3 tools/screenshots.py [board-ip]`. It shows staged sessions on the board for about a minute; the live sessions come back on the next hook event.
+| Plan usage, the last page |
+|---|
+| <img src="docs/images/usage.png" width="260" alt="Plan usage page: 5-hour limit 32% resetting in 2h 14m, weekly limit 61% resetting in 3d 3h, and context bars for four sessions"> |
+
+Every image is a real frame read from the board's frame buffer, with staged sessions, context and limits. To refresh them, flash the normal firmware and run `python3 tools/screenshots.py [board-ip]`. It shows staged sessions on the board for about two minutes and holds the hook's sender off meanwhile; the live sessions come back on the next hook event.
 
 ### Touch
 
@@ -101,12 +106,27 @@ node hook/install.js              # adds entries to ~/.claude/settings.json
 
 Start a new Claude Code session (sessions that were already open before the install will not report). A Clawd should appear on the board within a second. If not, see [Troubleshooting](#troubleshooting).
 
+#### Optional: context and plan limits
+
+Claude Code passes context-window and plan-limit usage only to the [status line](https://docs.claude.com/en/docs/claude-code/statusline) command, not to hooks. To show them on the board, pipe the status line's input to `hook/statusline-tap.js` from your status line script, right after it reads stdin:
+
+```bash
+input=$(cat)
+printf '%s' "$input" | node "$HOME/claude-monit/hook/statusline-tap.js" >/dev/null 2>&1 &
+```
+
+The tap writes `~/.claude-monit/ctx/<session>.json` and `~/.claude-monit/usage.json`, and sends a snapshot only when a number changed. Claude Code includes the weekly limit only some of the time; the board leaves out whatever it has not received. Once a reset time passes, the board shows that limit as 0% until new numbers arrive.
+
 To remove it:
 
 ```bash
 node hook/install.js --uninstall  # removes only claude-monit's entries
 rm -rf ~/.claude-monit            # session files and settings the hook kept
 ```
+
+### Preview the usage screens
+
+`pio run -e cyd_mock -t upload` flashes a preview that keeps WiFi but shows fake sessions and limits, cycling through the session page, the plan usage page, a details page and the desk clock every 8 s. Flash `-e cyd` again afterwards.
 
 ### Try it without WiFi
 
@@ -144,8 +164,8 @@ The hook stays out of Claude Code's way:
 ## Tests
 
 ```bash
-pio test -e native        # board logic: sessions, expiry, layout, LED, clock, weather, gestures
-(cd hook && node --test)  # hook: event mapping, naming, sender, installer
+pio test -e native        # board logic: sessions, expiry, layout, LED, clock, weather, gestures, usage
+(cd hook && node --test)  # hook: event mapping, naming, sender, installer, status line tap
 ```
 
 ## Layout
@@ -154,7 +174,7 @@ pio test -e native        # board logic: sessions, expiry, layout, LED, clock, w
 |---|---|
 | `lib/monit_core/` | Board logic with no hardware dependency, unit-tested on the Mac |
 | `src/` | Display, Clawd sprites, WiFi/HTTP, LED, touch, weather |
-| `hook/` | The Claude Code hook, the detached sender and the installer |
+| `hook/` | The Claude Code hook, the status line tap, the detached sender and the installer |
 | `docs/superpowers/` | Design spec and implementation plan |
 
 ## Security

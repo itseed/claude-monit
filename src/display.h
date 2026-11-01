@@ -12,6 +12,10 @@ struct StatusInfo {
   bool wifiUp;
   int wifiBars;
   int page = 0, pages = 1;  // dots in the status bar when sessions span pages
+  int h5 = -1, d7 = -1;     // plan limits, % used (-1 = unknown)
+  char h5Reset[6] = "";     // "14:00" local time the 5-hour limit resets, if known
+  char d7Reset[12] = "";    // "Fri 09:00" local time the 7-day limit resets, if known
+  char h5In[12] = "", d7In[12] = "";  // "2h 15m" until each reset, if known
 };
 
 class Display {
@@ -21,6 +25,8 @@ class Display {
   void renderSessions(const Session* const* v, int n, const StatusInfo& st, uint32_t nowMs);
   void renderEmpty(const char* host, const char* ip, const StatusInfo& st, uint32_t nowMs);
   void renderDetails(const Session& s, const StatusInfo& st, uint32_t nowMs);
+  // Full-screen plan usage: both limits with reset times, then context per session.
+  void renderUsage(const Session* const* v, int n, const StatusInfo& st, uint32_t nowMs);
   void renderSetup(const char* apName);
   void renderMessage(const char* line1, const char* line2);
   // Last rendered frame as a 24-bit BMP (for README screenshots via GET /screen.bmp).
@@ -36,4 +42,7 @@ class Display {
   void drawEffects(const Cell& c, const Session& s, int sx, int sy, int scale, uint32_t nowMs);
   void drawTemp(const Weather& w, int x, int y, int font, uint8_t datum);
   void drawFitted(const char* text, int cx, int y, int maxW, int font, uint16_t color);
+  void drawLimits(const StatusInfo& st);
+  void drawCtxBar(int ctx, int cx, int y, int maxW);
+  int drawLimitBlock(const char* label, int pct, const char* resetAt, const char* resetIn, int y);
 };

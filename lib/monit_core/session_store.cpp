@@ -32,6 +32,7 @@ bool SessionStore::applySnapshot(const Snapshot& s, uint32_t nowMs) {
     memcpy(d.tool, e.tool, sizeof(d.tool));
     d.state = d.reported = e.state;
     d.updatedAt = e.updatedAt;
+    d.ctx = e.ctx;
     uint64_t age = s.now > e.updatedAt ? s.now - e.updatedAt : 0;
     d.ageAtReceiptMs = age > 0xFFFFFFFFull ? 0xFFFFFFFFu : (uint32_t)age;
     d.receivedAtMs = nowMs;
@@ -59,6 +60,7 @@ bool SessionStore::applySnapshot(const Snapshot& s, uint32_t nowMs) {
 
   memcpy(sessions_, next, sizeof(Session) * n);
   count_ = n;
+  limits_ = s.limits;
   return true;
 }
 
